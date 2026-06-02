@@ -77,6 +77,7 @@ NGINX Pods
 ---
 
 ## Architecture Diagram
+<img width="1536" height="1024" alt="arch-diag-1" src="https://github.com/user-attachments/assets/603cecd2-7ca9-4433-872a-12d3457c580b" />
 
 
 
