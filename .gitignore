@@ -51,4 +51,4 @@ img
 new_img
 
 # text files
-.txt
+*.txt
