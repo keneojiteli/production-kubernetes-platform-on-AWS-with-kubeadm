@@ -489,17 +489,21 @@ Coming Soon:
 
 ---
 -->
-<!-- # References
+## References
 
-- Kubernetes Documentation
-- kubeadm Documentation
-- Calico Documentation
-- Gateway API Documentation
-- AWS Load Balancer Controller Documentation
-- Terraform Documentation
+
+* **Installing kubeadm (version-pinned via pkgs.k8s.io)** — [Kubernetes docs: Install kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/) *(kubernetes.io)*
+* **Container runtimes (kernel modules/sysctls)** — [Kubernetes docs: Container runtimes](https://kubernetes.io/docs/setup/production-environment/container-runtimes/) *(kubernetes.io)*
+* **Kubelet ↔ runtime cgroup driver (systemd)** — [Kubernetes docs: Configure cgroup driver](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/configure-cgroup-driver/) *(kubernetes.io)*
+* **Change Kubernetes package repository (pin a minor)** — [Kubernetes docs: Change package repository](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/change-package-repository/) *(kubernetes.io)*
+* **Kubernetes Services & NodePort** — [Kubernetes docs: Service](https://kubernetes.io/docs/concepts/services-networking/service/) *(kubernetes.io)*
+* **Kubernetes ports & protocols (APIs, components, CNIs, etc.)** — [Kubernetes docs: Ports and protocols](https://kubernetes.io/docs/reference/networking/ports-and-protocols/) *(kubernetes.io)*
+* **`kubeadm reset` (what gets cleaned up)** — [Kubernetes docs: kubeadm reset](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-reset/) *(kubernetes.io)*
+* **Calico system/network requirements (ports & protocols)** — [Calico docs: Kubernetes requirements](https://docs.tigera.io/calico/latest/getting-started/kubernetes/requirements) *(docs.tigera.io)*
+* **Calico install (operator/manifest) on self-managed clusters** — [Calico docs: On-premises install](https://docs.tigera.io/calico/latest/getting-started/kubernetes/self-managed-onprem/onpremises) *(docs.tigera.io)*
 
 ---
--->
+
 ## Connect
 
 If you are working on Kubernetes, cloud infrastructure, platform engineering, or DevOps, I would love to connect and exchange ideas.
