@@ -161,6 +161,32 @@ Work in Progress -->
 │
 └── README.md 
 ```
+kubeadm-production-platform/
+│
+├── infrastructure/
+│   └── terraform/
+│       ├── modules/
+│       ├── environments/
+│       └── README.md
+│
+├── kubernetes/
+│   ├── bootstrap/
+│   ├── calico/
+│   ├── gateway-api/
+│   ├── aws-load-balancer-controller/
+│   └── workloads/
+│
+├── docs/
+│   ├── phase-1-platform-build.md
+│   ├── troubleshooting-notes.md
+│   └── architecture/
+│
+├── images/
+│   ├── architecture/
+│   ├── screenshots/
+│   └── debugging/
+│
+└── README.md
 ---
 -->
 ## Project Objectives
