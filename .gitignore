@@ -52,3 +52,7 @@ new_img
 
 # text files
 *.txt
+
+.env
+**/backend/.env
+**/frontend/.env
