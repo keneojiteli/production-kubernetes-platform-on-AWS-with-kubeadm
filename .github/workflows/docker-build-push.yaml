@@ -24,12 +24,13 @@ jobs:
       matrix: # runs same pipeline for frontend & backend instead of duplicating code
         app:
           - name: backend
-            context: ../../quiz-app/backend
-            dockerfile: ./backend/Dockerfile
+            context: ./quiz-app/backend
+            dockerfile: ./quiz-app/backend/Dockerfile
             image: quiz-backend
+            
           - name: frontend
-            context: ../../quiz-app/frontend
-            dockerfile: ./frontend/Dockerfile
+            context: ./quiz-app/frontend
+            dockerfile: ./quiz-app/frontend/Dockerfile
             image: quiz-frontend
 
     steps:
