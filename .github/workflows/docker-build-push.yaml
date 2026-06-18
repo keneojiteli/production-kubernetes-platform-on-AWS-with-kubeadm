@@ -24,17 +24,17 @@ jobs:
       matrix: # runs same pipeline for frontend & backend instead of duplicating code
         app:
           - name: backend
-            context: ./backend
+            context: ../../quiz-app/backend
             dockerfile: ./backend/Dockerfile
             image: quiz-backend
           - name: frontend
-            context: ./frontend
+            context: ../../quiz-app/frontend
             dockerfile: ./frontend/Dockerfile
             image: quiz-frontend
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Normalize image owner
         id: owner
@@ -63,7 +63,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build image for scan
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.app.context }}
           file: ${{ matrix.app.dockerfile }}
@@ -84,7 +84,7 @@ jobs:
 
       - name: Push image to GHCR
         if: github.event_name != 'pull_request'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.app.context }}
           file: ${{ matrix.app.dockerfile }}
