@@ -1,6 +1,10 @@
 # Use current LTS Node.js on lightweight Alpine base
 FROM node:22-alpine AS base
 
+# Update Alpine packages to latest security patches
+# RUN apk update && apk upgrade
+RUN apk update && apk upgrade --no-cache
+
 # Install ca certificate
 RUN apk add --no-cache ca-certificates
 
