@@ -23,10 +23,10 @@ jobs:
     strategy:
       matrix: # runs same pipeline for frontend & backend instead of duplicating code
         app:
-          - name: backend
-            context: ./quiz-app/backend
-            dockerfile: ./quiz-app/backend/Dockerfile
-            image: quiz-backend
+          - name: backend # name for the matrix item
+            context: ./quiz-app/backend # folder used by Docker as the build context. Docker can only access files inside this folder during build
+            dockerfile: ./quiz-app/backend/Dockerfile # dockerfile location
+            image: quiz-backend # image name built & pushed to GHCR
             
           - name: frontend
             context: ./quiz-app/frontend
@@ -43,7 +43,7 @@ jobs:
 
       - name: Set image metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}
           tags: |
@@ -53,11 +53,11 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to GHCR
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -66,7 +66,7 @@ jobs:
       - name: Build image for scan
         uses: docker/build-push-action@v7
         with:
-          context: ${{ matrix.app.context }}
+          context: ${{ matrix.app.context }} # workflow path is based on the repository root, not from .github/workflows
           file: ${{ matrix.app.dockerfile }}
           push: false
           load: true
@@ -75,7 +75,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
 
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
           format: table
