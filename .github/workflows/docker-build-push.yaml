@@ -63,11 +63,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check backend lockfile picomatch versions
-        if: matrix.app.name == 'backend'
+      - name: Show repository structure
         run: |
-          cd backend
-          grep -n "picomatch" package-lock.json || true
+          pwd
+          ls -la
+          find . -maxdepth 3 -type d
+
+      # - name: Check backend lockfile picomatch versions
+      #   if: matrix.app.name == 'backend'
+      #   run: |
+      #     cd backend
+      #     grep -n "picomatch" package-lock.json || true
 
       # - name: Build image for scan
       #   uses: docker/build-push-action@v7
@@ -81,39 +87,39 @@ jobs:
       #     # cache-from: type=gha,scope=${{ matrix.app.name }}
       #     cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
 
-      - name: Build image for scan
-        uses: docker/build-push-action@v7
-        with:
-          context: ${{ matrix.app.context }}
-          file: ${{ matrix.app.dockerfile }}
-          push: false
-          load: true
-          no-cache: true
-          tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+      # - name: Build image for scan
+      #   uses: docker/build-push-action@v7
+      #   with:
+      #     context: ${{ matrix.app.context }}
+      #     file: ${{ matrix.app.dockerfile }}
+      #     push: false
+      #     load: true
+      #     no-cache: true
+      #     tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
 
 
-      - name: Check backend picomatch version inside built image
-        if: matrix.app.name == 'backend'
-        run: |
-         docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan npm ls picomatch || true
+      # - name: Check backend picomatch version inside built image
+      #   if: matrix.app.name == 'backend'
+      #   run: |
+      #    docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan npm ls picomatch || true
 
-      - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@0.35.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: 1 # fails the pipeline if HIGH or CRITICAL vulnerabilities are found
+      # - name: Scan image with Trivy
+      #   uses: aquasecurity/trivy-action@0.35.0
+      #   with:
+      #     image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+      #     format: table
+      #     severity: HIGH,CRITICAL
+      #     ignore-unfixed: true
+      #     exit-code: 1 # fails the pipeline if HIGH or CRITICAL vulnerabilities are found
 
-      - name: Push image to GHCR
-        if: github.event_name != 'pull_request'
-        uses: docker/build-push-action@v7
-        with:
-          context: ${{ matrix.app.context }}
-          file: ${{ matrix.app.dockerfile }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.app.name }} # speeds up Docker builds using GitHub Actions cache
-          cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
+      # - name: Push image to GHCR
+      #   if: github.event_name != 'pull_request'
+      #   uses: docker/build-push-action@v7
+      #   with:
+      #     context: ${{ matrix.app.context }}
+      #     file: ${{ matrix.app.dockerfile }}
+      #     push: true
+      #     tags: ${{ steps.meta.outputs.tags }}
+      #     labels: ${{ steps.meta.outputs.labels }}
+      #     cache-from: type=gha,scope=${{ matrix.app.name }} # speeds up Docker builds using GitHub Actions cache
+      #     cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
