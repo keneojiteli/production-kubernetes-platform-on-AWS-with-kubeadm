@@ -10,3 +10,4 @@ Dockerfile
 README.md
 npm-debug.log
 .env
+.github
