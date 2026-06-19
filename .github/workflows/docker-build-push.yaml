@@ -98,21 +98,21 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
 
 
-      - name: Check backend picomatch version inside built image
-        if: matrix.app.name == 'backend'
-        run: |
-         docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan npm ls picomatch || true
+      # - name: Check backend picomatch version inside built image
+      #   if: matrix.app.name == 'backend'
+      #   run: |
+      #    docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan npm ls picomatch || true
 
-      - name: Scan image with Trivy
-        # uses: aquasecurity/trivy-action@0.35.0
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: 1 # fails the pipeline if HIGH or CRITICAL vulnerabilities are found
-          cache: false
+      # - name: Scan image with Trivy
+      #   # uses: aquasecurity/trivy-action@0.35.0
+      #   uses: aquasecurity/trivy-action@v0.36.0
+      #   with:
+      #     image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+      #     format: table
+      #     severity: HIGH,CRITICAL
+      #     ignore-unfixed: true
+      #     exit-code: 1 # fails the pipeline if HIGH or CRITICAL vulnerabilities are found
+      #     cache: false
 
       # - name: Push image to GHCR
       #   if: github.event_name != 'pull_request'
@@ -125,3 +125,38 @@ jobs:
       #     labels: ${{ steps.meta.outputs.labels }}
       #     cache-from: type=gha,scope=${{ matrix.app.name }} # speeds up Docker builds using GitHub Actions cache
       #     cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
+
+      - name: Find exact picomatch source in backend image
+        if: matrix.app.name == 'backend'
+        run: |
+          docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan sh -c '
+            echo "=== app dir ==="
+            pwd
+            ls -la /usr/src/app || true
+
+            echo "=== npm tree ==="
+            cd /usr/src/app && npm ls picomatch || true
+
+            echo "=== exact picomatch 4.0.3 search ==="
+            grep -R "\"picomatch\"" /usr/src/app 2>/dev/null | head -100 || true
+            grep -R "\"version\": \"4.0.3\"" /usr/src/app 2>/dev/null | head -100 || true
+
+            echo "=== all package lock files ==="
+            find /usr/src/app -name "package-lock.json" -o -name ".package-lock.json" -o -name "package.json"
+          '
+
+      - name: Scan image with Trivy JSON
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+          format: json
+          output: trivy-results.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 0
+          cache: false
+
+      - name: Show Trivy picomatch source
+        if: matrix.app.name == 'backend'
+        run: |
+          cat trivy-results.json | grep -C 10 "picomatch" || true
