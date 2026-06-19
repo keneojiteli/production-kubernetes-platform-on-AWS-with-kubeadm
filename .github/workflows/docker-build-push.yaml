@@ -69,11 +69,11 @@ jobs:
           ls -la
           find . -maxdepth 3 -type d
 
-      # - name: Check backend lockfile picomatch versions
-      #   if: matrix.app.name == 'backend'
-      #   run: |
-      #     cd backend
-      #     grep -n "picomatch" package-lock.json || true
+      - name: Check backend lockfile picomatch versions
+        if: matrix.app.name == 'backend'
+        run: |
+          cd ${{ matrix.app.context }}
+          grep -n "picomatch" package-lock.json || true
 
       # - name: Build image for scan
       #   uses: docker/build-push-action@v7
