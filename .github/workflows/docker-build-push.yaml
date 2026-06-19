@@ -103,23 +103,23 @@ jobs:
         run: |
          docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan npm ls picomatch || true
 
-      # - name: Scan image with Trivy
-      #   uses: aquasecurity/trivy-action@0.35.0
-      #   with:
-      #     image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-      #     format: table
-      #     severity: HIGH,CRITICAL
-      #     ignore-unfixed: true
-      #     exit-code: 1 # fails the pipeline if HIGH or CRITICAL vulnerabilities are found
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1 # fails the pipeline if HIGH or CRITICAL vulnerabilities are found
 
-      # - name: Push image to GHCR
-      #   if: github.event_name != 'pull_request'
-      #   uses: docker/build-push-action@v7
-      #   with:
-      #     context: ${{ matrix.app.context }}
-      #     file: ${{ matrix.app.dockerfile }}
-      #     push: true
-      #     tags: ${{ steps.meta.outputs.tags }}
-      #     labels: ${{ steps.meta.outputs.labels }}
-      #     cache-from: type=gha,scope=${{ matrix.app.name }} # speeds up Docker builds using GitHub Actions cache
-      #     cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
+      - name: Push image to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.app.context }}
+          file: ${{ matrix.app.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.app.name }} # speeds up Docker builds using GitHub Actions cache
+          cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
