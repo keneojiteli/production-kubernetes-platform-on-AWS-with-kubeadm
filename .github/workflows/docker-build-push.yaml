@@ -87,21 +87,21 @@ jobs:
       #     # cache-from: type=gha,scope=${{ matrix.app.name }}
       #     cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
 
-      # - name: Build image for scan
-      #   uses: docker/build-push-action@v7
-      #   with:
-      #     context: ${{ matrix.app.context }}
-      #     file: ${{ matrix.app.dockerfile }}
-      #     push: false
-      #     load: true
-      #     no-cache: true
-      #     tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+      - name: Build image for scan
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.app.context }}
+          file: ${{ matrix.app.dockerfile }}
+          push: false
+          load: true
+          no-cache: true
+          tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
 
 
-      # - name: Check backend picomatch version inside built image
-      #   if: matrix.app.name == 'backend'
-      #   run: |
-      #    docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan npm ls picomatch || true
+      - name: Check backend picomatch version inside built image
+        if: matrix.app.name == 'backend'
+        run: |
+         docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan npm ls picomatch || true
 
       # - name: Scan image with Trivy
       #   uses: aquasecurity/trivy-action@0.35.0
