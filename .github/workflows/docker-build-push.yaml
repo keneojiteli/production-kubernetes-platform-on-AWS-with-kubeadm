@@ -63,16 +63,37 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check backend lockfile picomatch versions
+        if: matrix.app.name == 'backend'
+        run: |
+          cd backend
+          grep -n "picomatch" package-lock.json || true
+
+      # - name: Build image for scan
+      #   uses: docker/build-push-action@v7
+      #   with:
+      #     context: ${{ matrix.app.context }} # workflow path is based on the repository root, not from .github/workflows
+      #     file: ${{ matrix.app.dockerfile }}
+      #     push: false
+      #     load: true
+      #     tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+      #     cache-from: type=gha,scope=${{ matrix.app.name }}
+      #     cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
+
       - name: Build image for scan
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@7
         with:
-          context: ${{ matrix.app.context }} # workflow path is based on the repository root, not from .github/workflows
+          context: ${{ matrix.app.context }}
           file: ${{ matrix.app.dockerfile }}
           push: false
           load: true
+          no-cache: true
           tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-          cache-from: type=gha,scope=${{ matrix.app.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
+
+      - name: Check backend picomatch version inside built image
+        if: matrix.app.name == 'backend'
+        run: |
+         docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan npm ls picomatch || true
 
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@0.35.0
