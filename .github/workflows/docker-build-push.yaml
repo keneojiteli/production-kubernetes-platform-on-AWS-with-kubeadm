@@ -77,11 +77,12 @@ jobs:
       #     push: false
       #     load: true
       #     tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-      #     cache-from: type=gha,scope=${{ matrix.app.name }}
+      #     cache-from: ""
+      #     # cache-from: type=gha,scope=${{ matrix.app.name }}
       #     cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
 
       - name: Build image for scan
-        uses: docker/build-push-action@6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.app.context }}
           file: ${{ matrix.app.dockerfile }}
@@ -89,6 +90,7 @@ jobs:
           load: true
           no-cache: true
           tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+
 
       - name: Check backend picomatch version inside built image
         if: matrix.app.name == 'backend'
