@@ -122,16 +122,21 @@ jobs:
             find /usr/src/app -name "package-lock.json" -o -name ".package-lock.json" -o -name "package.json"
           '
 
-      # - name: Scan image with Trivy
-      #   # uses: aquasecurity/trivy-action@0.35.0
-      #   uses: aquasecurity/trivy-action@v0.36.0
-      #   with:
-      #     image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-      #     format: table
-      #     severity: HIGH,CRITICAL
-      #     ignore-unfixed: true
-      #     exit-code: 1 # fails the pipeline if HIGH or CRITICAL vulnerabilities are found
-      #     cache: false
+      - name: Scan image with Trivy
+        # uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1 # fails the pipeline if HIGH or CRITICAL vulnerabilities are found
+          cache: false
+
+      - name: Show Trivy picomatch source
+        if: matrix.app.name == 'backend'
+        run: |
+          cat trivy-results.json | grep -C 10 "picomatch" || true
 
       # - name: Push image to GHCR
       #   if: github.event_name != 'pull_request'
@@ -147,18 +152,14 @@ jobs:
 
 
 
-      - name: Scan image with Trivy JSON
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-          format: json
-          output: trivy-results.json
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: 0
-          cache: false
+      # - name: Scan image with Trivy JSON
+      #   uses: aquasecurity/trivy-action@v0.36.0
+      #   with:
+      #     image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+      #     format: json
+      #     output: trivy-results.json
+      #     severity: HIGH,CRITICAL
+      #     ignore-unfixed: true
+      #     exit-code: 0
+      #     cache: false
 
-      - name: Show Trivy picomatch source
-        if: matrix.app.name == 'backend'
-        run: |
-          cat trivy-results.json | grep -C 10 "picomatch" || true
