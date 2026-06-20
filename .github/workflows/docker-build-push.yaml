@@ -103,6 +103,25 @@ jobs:
       #   run: |
       #    docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan npm ls picomatch || true
 
+      - name: Find exact picomatch source in backend image
+        if: matrix.app.name == 'backend'
+        run: |
+          docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan sh -c '
+            echo "=== app dir ==="
+            pwd
+            ls -la /usr/src/app || true
+
+            echo "=== npm tree ==="
+            cd /usr/src/app && npm ls picomatch || true
+
+            echo "=== exact picomatch 4.0.3 search ==="
+            grep -R "\"picomatch\"" /usr/src/app 2>/dev/null | head -100 || true
+            grep -R "\"version\": \"4.0.3\"" /usr/src/app 2>/dev/null | head -100 || true
+
+            echo "=== all package lock files ==="
+            find /usr/src/app -name "package-lock.json" -o -name ".package-lock.json" -o -name "package.json"
+          '
+
       # - name: Scan image with Trivy
       #   # uses: aquasecurity/trivy-action@0.35.0
       #   uses: aquasecurity/trivy-action@v0.36.0
@@ -126,24 +145,7 @@ jobs:
       #     cache-from: type=gha,scope=${{ matrix.app.name }} # speeds up Docker builds using GitHub Actions cache
       #     cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
 
-      - name: Find exact picomatch source in backend image
-        if: matrix.app.name == 'backend'
-        run: |
-          docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan sh -c '
-            echo "=== app dir ==="
-            pwd
-            ls -la /usr/src/app || true
 
-            echo "=== npm tree ==="
-            cd /usr/src/app && npm ls picomatch || true
-
-            echo "=== exact picomatch 4.0.3 search ==="
-            grep -R "\"picomatch\"" /usr/src/app 2>/dev/null | head -100 || true
-            grep -R "\"version\": \"4.0.3\"" /usr/src/app 2>/dev/null | head -100 || true
-
-            echo "=== all package lock files ==="
-            find /usr/src/app -name "package-lock.json" -o -name ".package-lock.json" -o -name "package.json"
-          '
 
       - name: Scan image with Trivy JSON
         uses: aquasecurity/trivy-action@v0.36.0

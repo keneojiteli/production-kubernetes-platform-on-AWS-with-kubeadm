@@ -51,6 +51,9 @@ FROM node:22-alpine AS base
 RUN apk update && apk upgrade --no-cache
 RUN apk add --no-cache ca-certificates
 
+RUN npm install -g npm@latest
+
+
 ENV NODE_ENV=production
 WORKDIR /usr/src/app
 
