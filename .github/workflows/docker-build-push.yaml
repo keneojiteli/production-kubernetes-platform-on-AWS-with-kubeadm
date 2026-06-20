@@ -75,33 +75,33 @@ jobs:
       #     cd ${{ matrix.app.context }}
       #     grep -n "picomatch" package-lock.json || true
 
-      - name: Check backend lockfile undici versions
-        if: matrix.app.name == 'backend'
-        run: |
-          cd ${{ matrix.app.context }}
-          grep -n "undici" package-lock.json || true
-
-      # - name: Build image for scan
-      #   uses: docker/build-push-action@v7
-      #   with:
-      #     context: ${{ matrix.app.context }} # workflow path is based on the repository root, not from .github/workflows
-      #     file: ${{ matrix.app.dockerfile }}
-      #     push: false
-      #     load: true
-      #     tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-      #     cache-from: ""
-      #     # cache-from: type=gha,scope=${{ matrix.app.name }}
-      #     cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
+      # - name: Check backend lockfile undici versions
+      #   if: matrix.app.name == 'backend'
+      #   run: |
+      #     cd ${{ matrix.app.context }}
+      #     grep -n "undici" package-lock.json || true
 
       - name: Build image for scan
         uses: docker/build-push-action@v7
         with:
-          context: ${{ matrix.app.context }}
+          context: ${{ matrix.app.context }} # workflow path is based on the repository root, not from .github/workflows
           file: ${{ matrix.app.dockerfile }}
           push: false
           load: true
-          no-cache: true
           tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+          cache-from: ""
+          # cache-from: type=gha,scope=${{ matrix.app.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
+
+      # - name: Build image for scan
+      #   uses: docker/build-push-action@v7
+      #   with:
+      #     context: ${{ matrix.app.context }}
+      #     file: ${{ matrix.app.dockerfile }}
+      #     push: false
+      #     load: true
+      #     no-cache: true
+      #     tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
 
 
       # - name: Check backend picomatch version inside built image
@@ -128,24 +128,24 @@ jobs:
       #       find /usr/src/app -name "package-lock.json" -o -name ".package-lock.json" -o -name "package.json"
       #     '
 
-      - name: Find exact undici source in backend image
-        if: matrix.app.name == 'backend'
-        run: |
-          docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan sh -c '
-            echo "=== app dir ==="
-            pwd
-            ls -la /usr/src/app || true
+      # - name: Find exact undici source in backend image
+      #   if: matrix.app.name == 'backend'
+      #   run: |
+      #     docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan sh -c '
+      #       echo "=== app dir ==="
+      #       pwd
+      #       ls -la /usr/src/app || true
 
-            echo "=== npm tree ==="
-            cd /usr/src/app && npm ls undici || true
+      #       echo "=== npm tree ==="
+      #       cd /usr/src/app && npm ls undici || true
 
-            echo "=== exact undici 6.26.0 search ==="
-            grep -R "\"undici\"" /usr/src/app 2>/dev/null | head -100 || true
-            grep -R "\"version\": \"6.26.0\"" /usr/src/app 2>/dev/null | head -100 || true
+      #       echo "=== exact undici 6.26.0 search ==="
+      #       grep -R "\"undici\"" /usr/src/app 2>/dev/null | head -100 || true
+      #       grep -R "\"version\": \"6.26.0\"" /usr/src/app 2>/dev/null | head -100 || true
 
-            echo "=== all package lock files ==="
-            find /usr/src/app -name "package-lock.json" -o -name ".package-lock.json" -o -name "package.json"
-          '
+      #       echo "=== all package lock files ==="
+      #       find /usr/src/app -name "package-lock.json" -o -name ".package-lock.json" -o -name "package.json"
+      #     '
 
       - name: Scan image with Trivy
         # uses: aquasecurity/trivy-action@0.35.0
@@ -163,22 +163,22 @@ jobs:
       #   run: |
       #     cat trivy-results.json | grep -C 10 "picomatch" || true
 
-      - name: Show Trivy undici source
-        if: matrix.app.name == 'backend'
-        run: |
-          cat trivy-results.json | grep -C 10 "undici" || true
+      # - name: Show Trivy undici source
+      #   if: matrix.app.name == 'backend'
+      #   run: |
+      #     cat trivy-results.json | grep -C 10 "undici" || true
 
-      # - name: Push image to GHCR
-      #   if: github.event_name != 'pull_request'
-      #   uses: docker/build-push-action@v7
-      #   with:
-      #     context: ${{ matrix.app.context }}
-      #     file: ${{ matrix.app.dockerfile }}
-      #     push: true
-      #     tags: ${{ steps.meta.outputs.tags }}
-      #     labels: ${{ steps.meta.outputs.labels }}
-      #     cache-from: type=gha,scope=${{ matrix.app.name }} # speeds up Docker builds using GitHub Actions cache
-      #     cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
+      - name: Push image to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.app.context }}
+          file: ${{ matrix.app.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.app.name }} # speeds up Docker builds using GitHub Actions cache
+          cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
 
 
 
