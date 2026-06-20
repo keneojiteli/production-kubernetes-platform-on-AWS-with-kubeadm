@@ -53,6 +53,7 @@ RUN apk add --no-cache ca-certificates
 
 RUN npm install -g npm@latest
 
+RUN npm install -g undici@latest
 
 ENV NODE_ENV=production
 WORKDIR /usr/src/app
