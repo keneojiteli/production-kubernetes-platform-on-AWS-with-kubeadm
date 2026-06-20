@@ -69,11 +69,17 @@ jobs:
           ls -la
           find . -maxdepth 3 -type d
 
-      - name: Check backend lockfile picomatch versions
+      # - name: Check backend lockfile picomatch versions
+      #   if: matrix.app.name == 'backend'
+      #   run: |
+      #     cd ${{ matrix.app.context }}
+      #     grep -n "picomatch" package-lock.json || true
+
+      - name: Check backend lockfile undici versions
         if: matrix.app.name == 'backend'
         run: |
           cd ${{ matrix.app.context }}
-          grep -n "picomatch" package-lock.json || true
+          grep -n "undici" package-lock.json || true
 
       # - name: Build image for scan
       #   uses: docker/build-push-action@v7
@@ -103,7 +109,26 @@ jobs:
       #   run: |
       #    docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan npm ls picomatch || true
 
-      - name: Find exact picomatch source in backend image
+      # - name: Find exact picomatch source in backend image
+      #   if: matrix.app.name == 'backend'
+      #   run: |
+      #     docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan sh -c '
+      #       echo "=== app dir ==="
+      #       pwd
+      #       ls -la /usr/src/app || true
+
+      #       echo "=== npm tree ==="
+      #       cd /usr/src/app && npm ls picomatch || true
+
+      #       echo "=== exact picomatch 4.0.3 search ==="
+      #       grep -R "\"picomatch\"" /usr/src/app 2>/dev/null | head -100 || true
+      #       grep -R "\"version\": \"4.0.3\"" /usr/src/app 2>/dev/null | head -100 || true
+
+      #       echo "=== all package lock files ==="
+      #       find /usr/src/app -name "package-lock.json" -o -name ".package-lock.json" -o -name "package.json"
+      #     '
+
+      - name: Find exact undici source in backend image
         if: matrix.app.name == 'backend'
         run: |
           docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan sh -c '
@@ -112,11 +137,11 @@ jobs:
             ls -la /usr/src/app || true
 
             echo "=== npm tree ==="
-            cd /usr/src/app && npm ls picomatch || true
+            cd /usr/src/app && npm ls undici || true
 
-            echo "=== exact picomatch 4.0.3 search ==="
-            grep -R "\"picomatch\"" /usr/src/app 2>/dev/null | head -100 || true
-            grep -R "\"version\": \"4.0.3\"" /usr/src/app 2>/dev/null | head -100 || true
+            echo "=== exact undici 6.26.0 search ==="
+            grep -R "\"undici\"" /usr/src/app 2>/dev/null | head -100 || true
+            grep -R "\"version\": \"6.26.0\"" /usr/src/app 2>/dev/null | head -100 || true
 
             echo "=== all package lock files ==="
             find /usr/src/app -name "package-lock.json" -o -name ".package-lock.json" -o -name "package.json"
@@ -133,10 +158,15 @@ jobs:
           exit-code: 1 # fails the pipeline if HIGH or CRITICAL vulnerabilities are found
           cache: false
 
-      - name: Show Trivy picomatch source
+      # - name: Show Trivy picomatch source
+      #   if: matrix.app.name == 'backend'
+      #   run: |
+      #     cat trivy-results.json | grep -C 10 "picomatch" || true
+
+      - name: Show Trivy undici source
         if: matrix.app.name == 'backend'
         run: |
-          cat trivy-results.json | grep -C 10 "picomatch" || true
+          cat trivy-results.json | grep -C 10 "undici" || true
 
       # - name: Push image to GHCR
       #   if: github.event_name != 'pull_request'
