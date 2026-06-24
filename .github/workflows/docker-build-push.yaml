@@ -17,179 +17,222 @@ env:
   IMAGE_OWNER: ${{ github.repository_owner }}
 
 jobs:
-  build-scan-push:
+  quality-checks:
     runs-on: ubuntu-latest
 
     strategy:
-      matrix: # runs same pipeline for frontend & backend instead of duplicating code
+      matrix:
         app:
-          - name: backend # name for the matrix item
-            context: ./quiz-app/backend # folder used by Docker as the build context. Docker can only access files inside this folder during build
-            dockerfile: ./quiz-app/backend/Dockerfile # dockerfile location
-            image: quiz-backend # image name built & pushed to GHCR
-            
+          - name: backend
+            path: ./quiz-app/backend
           - name: frontend
-            context: ./quiz-app/frontend
-            dockerfile: ./quiz-app/frontend/Dockerfile
-            image: quiz-frontend
+            path: ./quiz-app/frontend
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Normalize image owner
-        id: owner
-        run: echo "value=$(echo '${{ env.IMAGE_OWNER }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
-
-      - name: Set image metadata
-        id: meta
-        uses: docker/metadata-action@v6
+      - name: Set up Node
+        uses: actions/setup-node@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}
-          tags: |
-            type=sha,prefix=
-            type=ref,event=branch
-            type=ref,event=tag
-            type=raw,value=latest,enable={{is_default_branch}}
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ${{ matrix.app.path }}/package-lock.json
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+      - name: Install dependencies
+        working-directory: ${{ matrix.app.path }}
+        run: npm ci
 
-      - name: Login to GHCR
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run lint
+        working-directory: ${{ matrix.app.path }}
+        run: npm run lint --if-present
 
-      - name: Show repository structure
-        run: |
-          pwd
-          ls -la
-          find . -maxdepth 3 -type d
+      - name: Run tests
+        working-directory: ${{ matrix.app.path }}
+        run: npm test --if-present
 
-      # - name: Check backend lockfile picomatch versions
-      #   if: matrix.app.name == 'backend'
-      #   run: |
-      #     cd ${{ matrix.app.context }}
-      #     grep -n "picomatch" package-lock.json || true
+      - name: Build app
+        working-directory: ${{ matrix.app.path }}
+        run: npm run build --if-present
 
-      # - name: Check backend lockfile undici versions
-      #   if: matrix.app.name == 'backend'
-      #   run: |
-      #     cd ${{ matrix.app.context }}
-      #     grep -n "undici" package-lock.json || true
+      - name: Audit dependencies
+        working-directory: ${{ matrix.app.path }}
+        run: npm audit --audit-level=high
 
-      - name: Build image for scan
-        uses: docker/build-push-action@v7
-        with:
-          context: ${{ matrix.app.context }} # workflow path is based on the repository root, not from .github/workflows
-          file: ${{ matrix.app.dockerfile }}
-          push: false
-          load: true
-          tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-          cache-from: ""
-          # cache-from: type=gha,scope=${{ matrix.app.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
+  # build-scan-push:
+  #   runs-on: ubuntu-latest
+  #   needs: quality-checks
 
-      # - name: Build image for scan
-      #   uses: docker/build-push-action@v7
-      #   with:
-      #     context: ${{ matrix.app.context }}
-      #     file: ${{ matrix.app.dockerfile }}
-      #     push: false
-      #     load: true
-      #     no-cache: true
-      #     tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+  #   strategy:
+  #     matrix: # runs same pipeline for frontend & backend instead of duplicating code
+  #       app:
+  #         - name: backend # name for the matrix item
+  #           context: ./quiz-app/backend # folder used by Docker as the build context. Docker can only access files inside this folder during build
+  #           dockerfile: ./quiz-app/backend/Dockerfile # dockerfile location
+  #           image: quiz-backend # image name built & pushed to GHCR
+            
+  #         - name: frontend
+  #           context: ./quiz-app/frontend
+  #           dockerfile: ./quiz-app/frontend/Dockerfile
+  #           image: quiz-frontend
 
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v5
 
-      # - name: Check backend picomatch version inside built image
-      #   if: matrix.app.name == 'backend'
-      #   run: |
-      #    docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan npm ls picomatch || true
+  #     - name: Normalize image owner
+  #       id: owner
+  #       run: echo "value=$(echo '${{ env.IMAGE_OWNER }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
-      # - name: Find exact picomatch source in backend image
-      #   if: matrix.app.name == 'backend'
-      #   run: |
-      #     docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan sh -c '
-      #       echo "=== app dir ==="
-      #       pwd
-      #       ls -la /usr/src/app || true
+  #     - name: Set image metadata
+  #       id: meta
+  #       uses: docker/metadata-action@v6
+  #       with:
+  #         images: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}
+  #         tags: |
+  #           type=sha,prefix=
+  #           type=ref,event=branch
+  #           type=ref,event=tag
+  #           type=raw,value=latest,enable={{is_default_branch}}
 
-      #       echo "=== npm tree ==="
-      #       cd /usr/src/app && npm ls picomatch || true
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v4
 
-      #       echo "=== exact picomatch 4.0.3 search ==="
-      #       grep -R "\"picomatch\"" /usr/src/app 2>/dev/null | head -100 || true
-      #       grep -R "\"version\": \"4.0.3\"" /usr/src/app 2>/dev/null | head -100 || true
+  #     - name: Login to GHCR
+  #       if: github.event_name != 'pull_request'
+  #       uses: docker/login-action@v4
+  #       with:
+  #         registry: ${{ env.REGISTRY }}
+  #         username: ${{ github.actor }}
+  #         password: ${{ secrets.GITHUB_TOKEN }}
 
-      #       echo "=== all package lock files ==="
-      #       find /usr/src/app -name "package-lock.json" -o -name ".package-lock.json" -o -name "package.json"
-      #     '
+  #     - name: Show repository structure
+  #       run: |
+  #         pwd
+  #         ls -la
+  #         find . -maxdepth 3 -type d
 
-      # - name: Find exact undici source in backend image
-      #   if: matrix.app.name == 'backend'
-      #   run: |
-      #     docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan sh -c '
-      #       echo "=== app dir ==="
-      #       pwd
-      #       ls -la /usr/src/app || true
+  #     # - name: Check backend lockfile picomatch versions
+  #     #   if: matrix.app.name == 'backend'
+  #     #   run: |
+  #     #     cd ${{ matrix.app.context }}
+  #     #     grep -n "picomatch" package-lock.json || true
 
-      #       echo "=== npm tree ==="
-      #       cd /usr/src/app && npm ls undici || true
+  #     # - name: Check backend lockfile undici versions
+  #     #   if: matrix.app.name == 'backend'
+  #     #   run: |
+  #     #     cd ${{ matrix.app.context }}
+  #     #     grep -n "undici" package-lock.json || true
 
-      #       echo "=== exact undici 6.26.0 search ==="
-      #       grep -R "\"undici\"" /usr/src/app 2>/dev/null | head -100 || true
-      #       grep -R "\"version\": \"6.26.0\"" /usr/src/app 2>/dev/null | head -100 || true
+  #     - name: Build image for scan
+  #       uses: docker/build-push-action@v7
+  #       with:
+  #         context: ${{ matrix.app.context }} # workflow path is based on the repository root, not from .github/workflows
+  #         file: ${{ matrix.app.dockerfile }}
+  #         push: false
+  #         load: true
+  #         tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+  #         # cache-from: ""
+  #         cache-from: type=gha,scope=${{ matrix.app.name }}
+  #         cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
 
-      #       echo "=== all package lock files ==="
-      #       find /usr/src/app -name "package-lock.json" -o -name ".package-lock.json" -o -name "package.json"
-      #     '
-
-      - name: Scan image with Trivy
-        # uses: aquasecurity/trivy-action@0.35.0
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: 1 # fails the pipeline if HIGH or CRITICAL vulnerabilities are found
-          cache: false
-
-      # - name: Show Trivy picomatch source
-      #   if: matrix.app.name == 'backend'
-      #   run: |
-      #     cat trivy-results.json | grep -C 10 "picomatch" || true
-
-      # - name: Show Trivy undici source
-      #   if: matrix.app.name == 'backend'
-      #   run: |
-      #     cat trivy-results.json | grep -C 10 "undici" || true
-
-      - name: Push image to GHCR
-        if: github.event_name != 'pull_request'
-        uses: docker/build-push-action@v7
-        with:
-          context: ${{ matrix.app.context }}
-          file: ${{ matrix.app.dockerfile }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.app.name }} # speeds up Docker builds using GitHub Actions cache
-          cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
+  #     # - name: Build image for scan
+  #     #   uses: docker/build-push-action@v7
+  #     #   with:
+  #     #     context: ${{ matrix.app.context }}
+  #     #     file: ${{ matrix.app.dockerfile }}
+  #     #     push: false
+  #     #     load: true
+  #     #     no-cache: true
+  #     #     tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
 
 
+  #     # - name: Check backend picomatch version inside built image
+  #     #   if: matrix.app.name == 'backend'
+  #     #   run: |
+  #     #    docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan npm ls picomatch || true
 
-      # - name: Scan image with Trivy JSON
-      #   uses: aquasecurity/trivy-action@v0.36.0
-      #   with:
-      #     image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-      #     format: json
-      #     output: trivy-results.json
-      #     severity: HIGH,CRITICAL
-      #     ignore-unfixed: true
-      #     exit-code: 0
-      #     cache: false
+  #     # - name: Find exact picomatch source in backend image
+  #     #   if: matrix.app.name == 'backend'
+  #     #   run: |
+  #     #     docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan sh -c '
+  #     #       echo "=== app dir ==="
+  #     #       pwd
+  #     #       ls -la /usr/src/app || true
+
+  #     #       echo "=== npm tree ==="
+  #     #       cd /usr/src/app && npm ls picomatch || true
+
+  #     #       echo "=== exact picomatch 4.0.3 search ==="
+  #     #       grep -R "\"picomatch\"" /usr/src/app 2>/dev/null | head -100 || true
+  #     #       grep -R "\"version\": \"4.0.3\"" /usr/src/app 2>/dev/null | head -100 || true
+
+  #     #       echo "=== all package lock files ==="
+  #     #       find /usr/src/app -name "package-lock.json" -o -name ".package-lock.json" -o -name "package.json"
+  #     #     '
+
+  #     # - name: Find exact undici source in backend image
+  #     #   if: matrix.app.name == 'backend'
+  #     #   run: |
+  #     #     docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan sh -c '
+  #     #       echo "=== app dir ==="
+  #     #       pwd
+  #     #       ls -la /usr/src/app || true
+
+  #     #       echo "=== npm tree ==="
+  #     #       cd /usr/src/app && npm ls undici || true
+
+  #     #       echo "=== exact undici 6.26.0 search ==="
+  #     #       grep -R "\"undici\"" /usr/src/app 2>/dev/null | head -100 || true
+  #     #       grep -R "\"version\": \"6.26.0\"" /usr/src/app 2>/dev/null | head -100 || true
+
+  #     #       echo "=== all package lock files ==="
+  #     #       find /usr/src/app -name "package-lock.json" -o -name ".package-lock.json" -o -name "package.json"
+  #     #     '
+
+  #     - name: Scan image with Trivy
+  #       # uses: aquasecurity/trivy-action@0.35.0
+  #       uses: aquasecurity/trivy-action@v0.36.0
+  #       with:
+  #         image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+  #         format: table
+  #         severity: HIGH,CRITICAL
+  #         ignore-unfixed: true
+  #         exit-code: 1 # fails the pipeline if HIGH or CRITICAL vulnerabilities are found
+  #         cache: false
+
+  #     # - name: Show Trivy picomatch source
+  #     #   if: matrix.app.name == 'backend'
+  #     #   run: |
+  #     #     cat trivy-results.json | grep -C 10 "picomatch" || true
+
+  #     # - name: Show Trivy undici source
+  #     #   if: matrix.app.name == 'backend'
+  #     #   run: |
+  #     #     cat trivy-results.json | grep -C 10 "undici" || true
+
+  #     - name: Push image to GHCR
+  #       if: github.event_name != 'pull_request'
+  #       uses: docker/build-push-action@v7
+  #       with:
+  #         context: ${{ matrix.app.context }}
+  #         file: ${{ matrix.app.dockerfile }}
+  #         push: true
+  #         tags: ${{ steps.meta.outputs.tags }}
+  #         labels: ${{ steps.meta.outputs.labels }}
+  #         cache-from: type=gha,scope=${{ matrix.app.name }} # speeds up Docker builds using GitHub Actions cache
+  #         cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
+
+
+
+  #     # - name: Scan image with Trivy JSON
+  #     #   uses: aquasecurity/trivy-action@v0.36.0
+  #     #   with:
+  #     #     image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+  #     #     format: json
+  #     #     output: trivy-results.json
+  #     #     severity: HIGH,CRITICAL
+  #     #     ignore-unfixed: true
+  #     #     exit-code: 0
+  #     #     cache: false
 
