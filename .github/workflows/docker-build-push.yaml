@@ -129,6 +129,7 @@ jobs:
         with:
           context: ${{ matrix.app.context }} # workflow path is based on the repository root, not from .github/workflows
           file: ${{ matrix.app.dockerfile }}
+          pull: true
           push: false
           load: true
           tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
