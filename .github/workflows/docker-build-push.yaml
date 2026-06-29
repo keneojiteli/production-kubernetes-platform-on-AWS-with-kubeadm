@@ -1,11 +1,26 @@
-name: CI - Build, Scan and Push Images
+name: CI - Build, Scan & Push Images
 
 on:
+  workflow_dispatch:
   push:
-    branches: ["main"]
-    tags: ["v*.*.*"] # creates release images when you push tags like v1.0.0
+    branches: 
+      - main
+      - feature/ec2-compose-deployment
+    paths:
+      - "quiz-app/backend/**" # ** matches everything inside folder including files & directories at all nested levels
+      - "quiz-app/frontend/**"
+      - ".github/workflows/**"
+      - "deploy/**"
+    # tags: ["v*.*.*"] # creates release images when you push tags like v1.0.0
+ 
   pull_request: # builds and scans PRs but does not push images
     branches: ["main"]
+    paths:
+      - "quiz-app/backend/**" # ** matches everything inside folder including files & directories at all nested levels
+      - "quiz-app/frontend/**"
+      - "deploy/**"
+      - ".github/workflows/**"
+
 
 permissions:
   contents: read
@@ -59,7 +74,8 @@ jobs:
         working-directory: ${{ matrix.app.path }}
         run: npm audit --audit-level=high
 
-  build-scan-push:
+  ci-build-scan-push:
+    name: Build, scan & push images
     runs-on: ubuntu-latest
     needs: quality-checks
 
@@ -202,6 +218,17 @@ jobs:
           exit-code: 1 # fails the pipeline if HIGH or CRITICAL vulnerabilities are found
           cache: false
 
+      # - name: Scan image with Trivy JSON
+      #   uses: aquasecurity/trivy-action@v0.36.0
+      #   with:
+      #     image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
+      #     format: json
+      #     output: trivy-results.json
+      #     severity: HIGH,CRITICAL
+      #     ignore-unfixed: true
+      #     exit-code: 0
+      #     cache: false
+
       # - name: Show Trivy picomatch source
       #   if: matrix.app.name == 'backend'
       #   run: |
@@ -219,21 +246,8 @@ jobs:
           context: ${{ matrix.app.context }}
           file: ${{ matrix.app.dockerfile }}
           push: true
+          pull: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.app.name }} # speeds up Docker builds using GitHub Actions cache
           cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
-
-
-
-      # - name: Scan image with Trivy JSON
-      #   uses: aquasecurity/trivy-action@v0.36.0
-      #   with:
-      #     image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-      #     format: json
-      #     output: trivy-results.json
-      #     severity: HIGH,CRITICAL
-      #     ignore-unfixed: true
-      #     exit-code: 0
-      #     cache: false
-

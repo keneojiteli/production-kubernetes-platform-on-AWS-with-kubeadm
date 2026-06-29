@@ -1,0 +1,61 @@
+name: EC2 docker-compose Deployment
+
+on:
+  workflow_run:
+    workflows: ["CI - Build, Scan & Push Images"]
+    # branches:
+    #   - main
+    types:
+        - completed
+
+  # push:
+  #   branches:
+  #     - feature/ec2-compose-deployment
+  #   paths:
+  #     - "quiz-app/backend/**"
+  #     - "quiz-app/frontend/**"
+  #     - "deploy/**"
+  #     - ".github/workflows/ec2-compose-ci-cd.yaml"
+
+  workflow_dispatch:
+
+jobs:
+    deploy-ec2:
+        name: Deploy to EC2 with docker compose
+        if:  ${{ (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || github.event_name == 'workflow_dispatch'}}
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v5
+
+            - name: Copy deploy files to EC2
+              uses: appleboy/scp-action@v1
+              with: 
+                host: ${{ secrets.EC2_HOST }}
+                username: ${{ vars.EC2_USER }}
+                key: ${{ secrets.EC2_SSH_KEY }}
+                source: "deploy/compose/docker-compose.yaml,deploy/nginx/quiz-app.conf"
+                target: "/tmp/quiz-app-deploy"
+
+            - name: Deploy on EC2
+              uses: appleboy/ssh-action@v1.2.0
+              with:
+                host: ${{ secrets.EC2_HOST }} # EC2 public IP/ domain
+                username: ${{ vars.EC2_USER }}
+                key: ${{ secrets.EC2_SSH_KEY }} # private SSH key
+                script: |
+                    sudo mkdir -p /opt/quiz-app
+                    sudo cp /tmp/quiz-app-deploy/deploy/compose/docker-compose.yml /opt/quiz-app/docker-compose.yaml
+
+                    sudo cp /tmp/quiz-app-deploy/deploy/nginx/quiz-app.conf /etc/nginx/sites-available/quiz-app
+                    sudo ln -sf /etc/nginx/sites-available/quiz-app /etc/nginx/sites-enabled/quiz-app
+                    sudo nginx -t
+                    sudo systemctl reload nginx
+
+                    cd /opt/quiz-app
+                    docker compose -f docker-compose.yaml pull
+                    docker compose -f docker-compose.yaml up -d
+
+                    sleep 10
+                    curl -f http://127.0.0.1:3000/health
