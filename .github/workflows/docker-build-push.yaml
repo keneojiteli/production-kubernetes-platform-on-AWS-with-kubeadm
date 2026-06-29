@@ -21,7 +21,6 @@ on:
       - "deploy/**"
       - ".github/workflows/**"
 
-
 permissions:
   contents: read
   packages: write # allows GHA push to GHCR
