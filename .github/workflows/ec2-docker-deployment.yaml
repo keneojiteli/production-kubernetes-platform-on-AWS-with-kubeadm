@@ -19,6 +19,10 @@ on:
 
   workflow_dispatch:
 
+env:
+  AWS_REGION: us-east-1
+  EC2_USER: ubuntu
+
 jobs:
     deploy-ec2:
         name: Deploy to EC2 with docker compose
@@ -39,7 +43,7 @@ jobs:
               with:
                 aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
                 aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                aws-region: ${{ vars.AWS_REGION }}
+                aws-region: ${{ env.AWS_REGION }}
 
             - name: Allow SSH from GitHub runner
               run: |
@@ -53,32 +57,34 @@ jobs:
               uses: appleboy/scp-action@v1
               with: 
                 host: ${{ secrets.EC2_HOST }}
-                username: ${{ vars.EC2_USER }}
+                username: ${{ env.EC2_USER }}
                 key: ${{ secrets.EC2_SSH_KEY }}
-                source: "deploy/compose/docker-compose.yaml,deploy/nginx/quiz-app.conf"
+                source: "deploy/compose/docker-compose.prod.yml,deploy/nginx/quiz-app.conf"
                 target: "/tmp/quiz-app-deploy"
 
             - name: Deploy on EC2
               uses: appleboy/ssh-action@v1.2.0
               with:
                 host: ${{ secrets.EC2_HOST }} # EC2 public IP/ domain
-                username: ${{ vars.EC2_USER }}
+                username: ${{ env.EC2_USER }}
                 key: ${{ secrets.EC2_SSH_KEY }} # private SSH key
                 script: |
+                    set -e
                     sudo mkdir -p /opt/quiz-app
-                    sudo cp /tmp/quiz-app-deploy/deploy/compose/docker-compose.yml /opt/quiz-app/docker-compose.yaml
+                    sudo cp /tmp/quiz-app-deploy/deploy/compose/docker-compose.prod.yml /opt/quiz-app/docker-compose.prod.yml
 
                     sudo cp /tmp/quiz-app-deploy/deploy/nginx/quiz-app.conf /etc/nginx/sites-available/quiz-app
                     sudo ln -sf /etc/nginx/sites-available/quiz-app /etc/nginx/sites-enabled/quiz-app
+                    sudo rm /etc/nginx/sites-enabled/default
                     sudo nginx -t
                     sudo systemctl reload nginx
 
                     cd /opt/quiz-app
-                    docker compose -f docker-compose.yaml pull
-                    docker compose -f docker-compose.yaml up -d
+                    docker compose -f docker-compose.prod.yml pull
+                    docker compose -f docker-compose.prod.yml up -d
 
                     sleep 10
-                    curl -f http://127.0.0.1:3000/
+                    curl -f http://127.0.0.1:3000/health
                     
             - name: Revoke SSH from GitHub runner
               if: always()
