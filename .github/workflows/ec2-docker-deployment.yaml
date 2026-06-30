@@ -74,8 +74,9 @@ jobs:
                     sudo cp /tmp/quiz-app-deploy/deploy/compose/docker-compose.prod.yml /opt/quiz-app/docker-compose.prod.yml
 
                     sudo cp /tmp/quiz-app-deploy/deploy/nginx/quiz-app.conf /etc/nginx/sites-available/quiz-app
+                    sudo rm -f /etc/nginx/sites-enabled/default
                     sudo ln -sf /etc/nginx/sites-available/quiz-app /etc/nginx/sites-enabled/quiz-app
-                    sudo rm /etc/nginx/sites-enabled/default
+
                     sudo nginx -t
                     sudo systemctl reload nginx
 
