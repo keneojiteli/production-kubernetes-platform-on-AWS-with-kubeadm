@@ -163,7 +163,7 @@ jobs:
       #     tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
 
 
-      # - name: Check backend picomatch version inside built image
+      # - name: Check backend picomatch version inside built image - for debugging
       #   if: matrix.app.name == 'backend'
       #   run: |
       #    docker run --rm ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan npm ls picomatch || true
