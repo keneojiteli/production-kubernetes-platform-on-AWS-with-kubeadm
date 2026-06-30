@@ -1,10 +1,10 @@
-name: CI - Build, Scan & Push Images
+name: CI - Build, Scan, Push  & Deploy to server
 
 on:
   workflow_dispatch:
   push:
     branches: 
-      - main
+      # - main
       - feature/ec2-compose-deployment
     paths:
       - "quiz-app/backend/**" # ** matches everything inside folder including files & directories at all nested levels
@@ -29,6 +29,8 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_OWNER: ${{ github.repository_owner }}
+  AWS_REGION: us-east-1
+  EC2_USER: ubuntu
 
 jobs:
   quality-checks:
@@ -250,3 +252,77 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.app.name }} # speeds up Docker builds using GitHub Actions cache
           cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
+
+  deploy-ec2:
+        name: Deploy to EC2 with docker compose
+        needs: ci-build-scan-push
+        if: github.ref == 'refs/heads/feature/ec2-compose-deployment'
+        # if:  ${{ (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || github.event_name == 'workflow_dispatch'}}
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v5
+
+            - name: Get GitHub runner IP
+              id: ip
+              run: |
+                echo "ipv4=$(curl -s https://checkip.amazonaws.com)" >> "$GITHUB_OUTPUT"
+
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@v6
+              with:
+                aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                aws-region: ${{ env.AWS_REGION }}
+
+            - name: Allow SSH from GitHub runner
+              run: |
+                aws ec2 authorize-security-group-ingress \
+                  --group-id ${{ secrets.EC2_SECURITY_GROUP_ID }} \
+                  --protocol tcp \
+                  --port 22 \
+                  --cidr ${{ steps.ip.outputs.ipv4 }}/32
+
+            - name: Copy deploy files to EC2
+              uses: appleboy/scp-action@v1
+              with: 
+                host: ${{ secrets.EC2_HOST }}
+                username: ${{ env.EC2_USER }}
+                key: ${{ secrets.EC2_SSH_KEY }}
+                source: "deploy/compose/docker-compose.prod.yml,deploy/nginx/quiz-app.conf"
+                target: "/tmp/quiz-app-deploy"
+
+            - name: Deploy on EC2
+              uses: appleboy/ssh-action@v1.2.0
+              with:
+                host: ${{ secrets.EC2_HOST }} # EC2 public IP/ domain
+                username: ${{ env.EC2_USER }}
+                key: ${{ secrets.EC2_SSH_KEY }} # private SSH key
+                script: |
+                    set -e
+                    sudo mkdir -p /opt/quiz-app
+                    sudo cp /tmp/quiz-app-deploy/deploy/compose/docker-compose.prod.yml /opt/quiz-app/docker-compose.prod.yml
+
+                    sudo cp /tmp/quiz-app-deploy/deploy/nginx/quiz-app.conf /etc/nginx/sites-available/quiz-app
+                    sudo rm -f /etc/nginx/sites-enabled/default
+                    sudo ln -sf /etc/nginx/sites-available/quiz-app /etc/nginx/sites-enabled/quiz-app
+
+                    sudo nginx -t
+                    sudo systemctl reload nginx
+
+                    cd /opt/quiz-app
+                    docker compose -f docker-compose.prod.yml pull
+                    docker compose -f docker-compose.prod.yml up -d
+
+                    sleep 10
+                    curl -f http://127.0.0.1:3000/health
+                    
+            - name: Revoke SSH from GitHub runner
+              if: always()
+              run: |
+                aws ec2 revoke-security-group-ingress \
+                  --group-id ${{ secrets.EC2_SECURITY_GROUP_ID }} \
+                  --protocol tcp \
+                  --port 22 \
+                  --cidr ${{ steps.ip.outputs.ipv4 }}/32
