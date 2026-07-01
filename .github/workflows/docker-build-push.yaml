@@ -318,7 +318,9 @@ jobs:
                     docker compose -f docker-compose.prod.yml up -d
 
                     sleep 10
+                    docker compose -f docker-compose.prod.yml ps
                     curl -f http://127.0.0.1:3000/health
+                    curl -f http://127.0.0.1:8080
                     
             - name: Revoke SSH from GitHub runner
               if: always()
