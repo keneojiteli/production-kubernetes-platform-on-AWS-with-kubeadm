@@ -1,7 +1,7 @@
 name: CI - Build, Scan, Push  & Deploy to server
 
 on:
-  workflow_dispatch:
+  # workflow_dispatch:
   push:
     branches: 
       # - main
@@ -146,7 +146,7 @@ jobs:
         with:
           context: ${{ matrix.app.context }} # workflow path is based on the repository root, not from .github/workflows
           file: ${{ matrix.app.dockerfile }}
-          pull: true
+          pull: true # docker checks for the newest base image before building
           push: false
           load: true
           tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
@@ -300,7 +300,7 @@ jobs:
                 username: ${{ env.EC2_USER }}
                 key: ${{ secrets.EC2_SSH_KEY }} # private SSH key
                 script: |
-                    set -e
+                    set -e 
                     sudo mkdir -p /opt/quiz-app
                     sudo cp /tmp/quiz-app-deploy/deploy/compose/docker-compose.prod.yml /opt/quiz-app/docker-compose.prod.yml
 
