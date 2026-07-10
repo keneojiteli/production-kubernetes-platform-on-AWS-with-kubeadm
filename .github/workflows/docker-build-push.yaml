@@ -147,12 +147,13 @@ jobs:
           context: ${{ matrix.app.context }} # workflow path is based on the repository root, not from .github/workflows
           file: ${{ matrix.app.dockerfile }}
           pull: true # docker checks for the newest base image before building
+          no-cache: true
           push: false
           load: true
           tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
           # cache-from: ""
-          cache-from: type=gha,scope=${{ matrix.app.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
+          # cache-from: type=gha,scope=${{ matrix.app.name }}
+          # cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
 
       # - name: Build image for scan
       #   uses: docker/build-push-action@v7
