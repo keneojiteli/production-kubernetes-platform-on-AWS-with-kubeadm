@@ -1,12 +1,13 @@
 services:
   backend:
-    image: ghcr.io/keneojiteli/quiz-app-backend:v1.0.0
+    image: ghcr.io/keneojiteli/quiz-backend:feature-ec2-compose-deployment
     ports:
       - "127.0.0.1:3000:3000" # use IP:port if nginx is installed directly on EC2
     env_file:
       - ./backend.env
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      # test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -16,7 +17,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: ghcr.io/keneojiteli/quiz-app-frontend:v1.0.0
+    image: ghcr.io/keneojiteli/quiz-frontend:feature-ec2-compose-deployment
     ports:
       - "127.0.0.1:8080:80"
     healthcheck:

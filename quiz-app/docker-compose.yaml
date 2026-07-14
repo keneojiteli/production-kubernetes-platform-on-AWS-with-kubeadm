@@ -1,10 +1,10 @@
 services:
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: ghcr.io/keneojiteli/quiz-app-backend:v1.0.0
-    container_name: quiz-app-backend
+    build: # compose should build image from a Dockerfile
+      context: ./backend # folder docker can see during build
+      dockerfile: Dockerfile # dockerfile to be used
+    image: ghcr.io/keneojiteli/quiz-app-backend:local # name of image built with docker compose
+    container_name: quiz-app-backend # container name built with docker compose
     ports:
       - "3000:3000"
     env_file:
@@ -19,7 +19,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: ghcr.io/keneojiteli/quiz-app-frontend:v1.0.0
+    image: ghcr.io/keneojiteli/quiz-app-frontend:local
     container_name: quiz-app-frontend
     ports:
       - "8080:80"
