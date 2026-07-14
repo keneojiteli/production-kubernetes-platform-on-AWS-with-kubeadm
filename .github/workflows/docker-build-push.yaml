@@ -291,7 +291,7 @@ jobs:
                 host: ${{ secrets.EC2_HOST }}
                 username: ${{ env.EC2_USER }}
                 key: ${{ secrets.EC2_SSH_KEY }}
-                source: "deploy/compose/docker-compose.prod.yml,deploy/nginx/quiz-app.conf"
+                source: "deploy/compose/docker-compose.prod.yml,deploy/nginx/quiz-app.conf,deploy/monitoring/**"
                 target: "/tmp/quiz-app-deploy"
 
             - name: Deploy on EC2

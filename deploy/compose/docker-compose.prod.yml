@@ -31,6 +31,87 @@ services:
       - quiz-network
     restart: unless-stopped
 
+ # scrape & stores metrics
+  prometheus:
+    image: prom/prometheus:v3.11.2
+    container_name: prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro # EC2 path
+      # - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro # local testing/windows path
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090" # this service is not exposed directly to the internet
+    networks:
+      - quiz-network
+    restart: unless-stopped
+
+  # visualize metrics
+  grafana:
+    image: grafana/grafana:12.4.0
+    container_name: grafana
+    env_file:
+      - ./monitoring.env
+    # environment:
+    #   GF_SECURITY_ADMIN_USER: admin
+    #   GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    #   GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro #EC2 path
+      # - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro # local testing/windows path
+    ports:
+      - "127.0.0.1:3001:3000"
+    networks:
+      - quiz-network
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+# expose container metrics
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.3
+    container_name: cadvisor
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    ports:
+      - "127.0.0.1:8081:8080"
+    networks:
+      - quiz-network
+    restart: unless-stopped
+
+#expose EC2 host metrics
+  node-exporter:
+    image: prom/node-exporter:v1.11.1
+    # image: quay.io/prometheus/node-exporter:latest
+    container_name: node_exporter
+    command:
+      - "--path.rootfs=/host"
+    pid: host
+    volumes:
+      # - /:/host:ro,rslave
+      - /:/host:ro
+    ports:
+      - "127.0.0.1:9100:9100"
+    networks:
+      - quiz-network
+    restart: unless-stopped
+
 networks:
   quiz-network:
     driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:

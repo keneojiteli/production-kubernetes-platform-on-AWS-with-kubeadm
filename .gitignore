@@ -57,3 +57,5 @@ new_img
 .env
 **/backend/.env
 **/frontend/.env
+deploy/compose/backend.env
+deploy/compose/monitoring.env
