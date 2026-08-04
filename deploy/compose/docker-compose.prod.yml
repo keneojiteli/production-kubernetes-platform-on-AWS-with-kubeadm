@@ -1,13 +1,14 @@
 services:
   backend:
     image: ghcr.io/keneojiteli/quiz-backend:feature-ec2-compose-deployment
+    container_name: quiz-backend
     ports:
       - "127.0.0.1:3000:3000" # use IP:port if nginx is installed directly on EC2
     env_file:
       - ./backend.env
     healthcheck:
       # test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health/ready || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -18,15 +19,18 @@ services:
 
   frontend:
     image: ghcr.io/keneojiteli/quiz-frontend:feature-ec2-compose-deployment
+    container_name: quiz-frontend
     ports:
       - "127.0.0.1:8080:80"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      test: ["CMD", "wget", "-qO-", "http://localhost/ || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 10s
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - quiz-network
     restart: unless-stopped
@@ -56,10 +60,6 @@ services:
     container_name: grafana
     env_file:
       - ./monitoring.env
-    # environment:
-    #   GF_SECURITY_ADMIN_USER: admin
-    #   GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
-    #   GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro #EC2 path

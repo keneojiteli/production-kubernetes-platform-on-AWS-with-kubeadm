@@ -6,6 +6,7 @@ on:
     branches: 
       # - main
       - feature/ec2-compose-deployment
+      # - feature/ec2-monitoring
     paths:
       - "quiz-app/backend/**" # ** matches everything inside folder including files & directories at all nested levels
       - "quiz-app/frontend/**"
@@ -220,17 +221,6 @@ jobs:
           exit-code: 1 # fails the pipeline if HIGH or CRITICAL vulnerabilities are found
           cache: false
 
-      # - name: Scan image with Trivy JSON
-      #   uses: aquasecurity/trivy-action@v0.36.0
-      #   with:
-      #     image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-      #     format: json
-      #     output: trivy-results.json
-      #     severity: HIGH,CRITICAL
-      #     ignore-unfixed: true
-      #     exit-code: 0
-      #     cache: false
-
       # - name: Show Trivy picomatch source
       #   if: matrix.app.name == 'backend'
       #   run: |
@@ -302,26 +292,58 @@ jobs:
                 key: ${{ secrets.EC2_SSH_KEY }} # private SSH key
                 script: |
                     set -e 
+                    
+                    # Create persistent deployment directories
                     sudo mkdir -p /opt/quiz-app
+                    sudo mkdir -p /opt/quiz-app/monitoring
+                    sudo mkdir -p /opt/quiz-app/monitoring/grafana/provisioning
+
+                    # Copy Docker Compose configuration
                     sudo cp /tmp/quiz-app-deploy/deploy/compose/docker-compose.prod.yml /opt/quiz-app/docker-compose.prod.yml
 
+                    # Copy monitoring configuration
+                    sudo cp -r /tmp/quiz-app-deploy/deploy/monitoring/. /opt/quiz-app/monitoring/
+                    
+                    # Install the version-controlled Nginx configuration
                     sudo cp /tmp/quiz-app-deploy/deploy/nginx/quiz-app.conf /etc/nginx/sites-available/quiz-app
                     sudo rm -f /etc/nginx/sites-enabled/default
                     sudo ln -sf /etc/nginx/sites-available/quiz-app /etc/nginx/sites-enabled/quiz-app
 
+                    # Validate before reloading Nginx
                     sudo nginx -t
                     sudo systemctl reload nginx
 
+                    # Authenticate EC2 Docker daemon to private GHCR packages
                     echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ env.IMAGE_OWNER }}" --password-stdin
 
                     cd /opt/quiz-app
-                    docker compose -f docker-compose.prod.yml pull
+
+                    # Ensure server-only configuration exists
+                    test -f backend.env
+                    test -f monitoring.env
+                    test -f monitoring/prometheus.yml
+
+                    # Pull pinned application & monitoring images
+                    docker compose -f docker-compose.prod.yml 
+                    
+                    # Create or update all services
                     docker compose -f docker-compose.prod.yml up -d
 
-                    sleep 10
+                    # Allow containers time to initialize
+                    sleep 20
+
+                    # Show deployment state
                     docker compose -f docker-compose.prod.yml ps
+
+                    # Verify application services
                     curl -f http://127.0.0.1:3000/health
-                    curl -f http://127.0.0.1:8080
+                    curl -f http://127.0.0.1:
+                      
+                    # Verify monitoring services
+                    curl -f http://127.0.0.1:9090/-/healthy
+                    curl -f http://127.0.0.1:9100/metrics > /dev/null
+                    curl -f http://127.0.0.1:8081/metrics > /dev/null
+                    curl -f http://127.0.0.1:3001/api/health
                     
             - name: Revoke SSH from GitHub runner
               if: always()
