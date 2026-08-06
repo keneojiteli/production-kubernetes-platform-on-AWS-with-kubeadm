@@ -19,6 +19,10 @@ on:
       - "deploy/**"
       - ".github/workflows/**"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   packages: write # allows GHA push to GHCR
