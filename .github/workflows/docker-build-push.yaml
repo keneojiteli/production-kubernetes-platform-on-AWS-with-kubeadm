@@ -268,7 +268,7 @@ jobs:
                 host: ${{ secrets.EC2_HOST }}
                 username: ${{ env.EC2_USER }}
                 key: ${{ secrets.EC2_SSH_KEY }}
-                source: "deploy/compose/docker-compose.prod.yml,deploy/nginx/quiz-app.conf"
+                source: "deploy/compose/docker-compose.prod.yml,deploy/nginx/bootstrap.conf,deploy/nginx/quiz-app.conf"
                 target: "/tmp/quiz-app-deploy"
 
             - name: Deploy on EC2
@@ -293,6 +293,12 @@ jobs:
                     "${APP_DIR}/certbot/www"
 
                   sudo chown -R "$USER:$USER" "${APP_DIR}"
+
+                  echo "========================================"
+                  echo "Inspecting copied deployment files"
+                  echo "========================================"
+
+                  find /tmp/quiz-app-deploy -maxdepth 5 -type f -print
 
 
                   echo "========================================"
