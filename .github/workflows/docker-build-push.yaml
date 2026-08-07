@@ -447,7 +447,7 @@ jobs:
                     -f docker-compose.prod.yml \
                     exec -T nginx \
                     wget -qO- \
-                    http://backend:3000/health/ready
+                    http://backend:3000/health
 
                   docker compose \
                     -f docker-compose.prod.yml \
