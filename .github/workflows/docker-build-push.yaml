@@ -1,7 +1,7 @@
 name: CI - Build, Scan, Push  & Deploy to server
 
 on:
-  # workflow_dispatch:
+  workflow_dispatch:
   push:
     branches: 
       - refactor/containerized-nginx-certbot
