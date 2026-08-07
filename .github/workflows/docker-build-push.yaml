@@ -481,6 +481,7 @@ jobs:
                       --profile certificate \
                       run --rm certbot \
                       certonly \
+                      --non-interactive \
                       --webroot \
                       --webroot-path=/var/www/certbot \
                       --email "${{ secrets.CERTBOT_EMAIL }}" \
@@ -488,6 +489,10 @@ jobs:
                       --no-eff-email \
                       -d "${DOMAIN}"
 
+                    if [ ! -f "${CERT_FILE}" ]; then
+                      echo "Certificate command completed but fullchain.pem was not created."
+                      exit 1
+                    fi
 
                     echo "Certificate issued successfully."
 
