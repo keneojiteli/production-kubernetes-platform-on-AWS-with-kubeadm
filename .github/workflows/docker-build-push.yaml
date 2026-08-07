@@ -34,7 +34,7 @@ env:
   AWS_REGION: us-east-1
   EC2_USER: ubuntu
   IMAGE_TAG: sha-${{ github.sha }}
-  APP_DOMAIN: kene-quiz@duckdns.org
+  APP_DOMAIN: kene-quiz.duckdns.org
 
 jobs:
   quality-checks:
