@@ -320,8 +320,8 @@ jobs:
                   DOMAIN=${{ env.APP_DOMAIN }}
                   EOF
 
-                  cat > "${APP_DIR}/backend.env" <<'EOF'
-                  MONGODB_URI=${{ secrets.MONGODB_URI }}
+                  cat > "${APP_DIR}/backend.env" <<EOF
+                  MONGO_URI=${{ secrets.MONGODB_URI }}
                   NODE_ENV=production
                   EOF
 
