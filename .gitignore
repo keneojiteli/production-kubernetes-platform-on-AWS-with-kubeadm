@@ -54,6 +54,13 @@ new_img
 # text files
 *.txt
 
+# Environment and runtime secrets
 .env
 **/backend/.env
 **/frontend/.env
+*.env
+
+# Let's Encrypt / Certbot runtime data
+**/certbot/conf/
+**/certbot/www/
+**/nginx/app.conf

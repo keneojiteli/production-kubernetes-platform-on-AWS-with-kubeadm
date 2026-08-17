@@ -1,17 +1,15 @@
 name: CI - Build, Scan, Push  & Deploy to server
 
 on:
-  # workflow_dispatch:
+  workflow_dispatch:
   push:
     branches: 
-      # - main
-      - feature/ec2-compose-deployment
+      - refactor/containerized-nginx-certbot
     paths:
       - "quiz-app/backend/**" # ** matches everything inside folder including files & directories at all nested levels
       - "quiz-app/frontend/**"
       - ".github/workflows/**"
       - "deploy/**"
-    # tags: ["v*.*.*"] # creates release images when you push tags like v1.0.0
  
   pull_request: # builds and scans PRs but does not push images
     branches: ["main"]
@@ -20,6 +18,10 @@ on:
       - "quiz-app/frontend/**"
       - "deploy/**"
       - ".github/workflows/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -31,6 +33,8 @@ env:
   IMAGE_OWNER: ${{ github.repository_owner }}
   AWS_REGION: us-east-1
   EC2_USER: ubuntu
+  IMAGE_TAG: sha-${{ github.sha }}
+  APP_DOMAIN: kene-quiz.duckdns.org
 
 jobs:
   quality-checks:
@@ -101,19 +105,41 @@ jobs:
         id: owner
         run: echo "value=$(echo '${{ env.IMAGE_OWNER }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
-      - name: Set image metadata
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}
-          tags: |
-            type=sha,prefix=
-            type=ref,event=branch
-            type=ref,event=tag
-            type=raw,value=latest,enable={{is_default_branch}}
+      - name: Set image name & tag
+        id: image
+        shell: bash
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}"
+          TAG="sha-${GITHUB_SHA}"
+
+          echo "name=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "full=${IMAGE}:${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+
+      - name: Build image once
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.app.context }}
+          file: ${{ matrix.app.dockerfile }}
+          pull: true
+          load: true
+          push: false
+          tags: ${{ steps.image.outputs.full }}
+          cache-from: type=gha,scope=${{ matrix.app.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.image.outputs.full }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+          cache: false
 
       - name: Login to GHCR
         if: github.event_name != 'pull_request'
@@ -123,11 +149,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Show repository structure
-        run: |
-          pwd
-          ls -la
-          find . -maxdepth 3 -type d
+      # Commented steps are for debugging
+      # - name: Show repository structure
+      #   run: |
+      #     pwd
+      #     ls -la
+      #     find . -maxdepth 3 -type d
 
       # - name: Check backend lockfile picomatch versions
       #   if: matrix.app.name == 'backend'
@@ -140,31 +167,6 @@ jobs:
       #   run: |
       #     cd ${{ matrix.app.context }}
       #     grep -n "undici" package-lock.json || true
-
-      - name: Build image for scan
-        uses: docker/build-push-action@v7
-        with:
-          context: ${{ matrix.app.context }} # workflow path is based on the repository root, not from .github/workflows
-          file: ${{ matrix.app.dockerfile }}
-          pull: true # docker checks for the newest base image before building
-          no-cache: true
-          push: false
-          load: true
-          tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-          # cache-from: ""
-          # cache-from: type=gha,scope=${{ matrix.app.name }}
-          # cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
-
-      # - name: Build image for scan
-      #   uses: docker/build-push-action@v7
-      #   with:
-      #     context: ${{ matrix.app.context }}
-      #     file: ${{ matrix.app.dockerfile }}
-      #     push: false
-      #     load: true
-      #     no-cache: true
-      #     tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-
 
       # - name: Check backend picomatch version inside built image - for debugging
       #   if: matrix.app.name == 'backend'
@@ -209,28 +211,6 @@ jobs:
       #       find /usr/src/app -name "package-lock.json" -o -name ".package-lock.json" -o -name "package.json"
       #     '
 
-      - name: Scan image with Trivy
-        # uses: aquasecurity/trivy-action@0.35.0
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: 1 # fails the pipeline if HIGH or CRITICAL vulnerabilities are found
-          cache: false
-
-      # - name: Scan image with Trivy JSON
-      #   uses: aquasecurity/trivy-action@v0.36.0
-      #   with:
-      #     image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ matrix.app.image }}:scan
-      #     format: json
-      #     output: trivy-results.json
-      #     severity: HIGH,CRITICAL
-      #     ignore-unfixed: true
-      #     exit-code: 0
-      #     cache: false
-
       # - name: Show Trivy picomatch source
       #   if: matrix.app.name == 'backend'
       #   run: |
@@ -241,24 +221,15 @@ jobs:
       #   run: |
       #     cat trivy-results.json | grep -C 10 "undici" || true
 
-      - name: Push image to GHCR
+      - name: Push scanned image to GHCR
         if: github.event_name != 'pull_request'
-        uses: docker/build-push-action@v7
-        with:
-          context: ${{ matrix.app.context }}
-          file: ${{ matrix.app.dockerfile }}
-          push: true
-          pull: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.app.name }} # speeds up Docker builds using GitHub Actions cache
-          cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
+        run: |
+          docker push "${{ steps.image.outputs.full }}"
 
   deploy-ec2:
         name: Deploy to EC2 with docker compose
         needs: ci-build-scan-push
-        if: github.ref == 'refs/heads/feature/ec2-compose-deployment'
-        # if:  ${{ (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || github.event_name == 'workflow_dispatch'}}
+        if: github.ref == 'refs/heads/refactor/containerized-nginx-certbot'
         runs-on: ubuntu-latest
 
         steps:
@@ -291,7 +262,7 @@ jobs:
                 host: ${{ secrets.EC2_HOST }}
                 username: ${{ env.EC2_USER }}
                 key: ${{ secrets.EC2_SSH_KEY }}
-                source: "deploy/compose/docker-compose.prod.yml,deploy/nginx/quiz-app.conf"
+                source: "deploy/compose/docker-compose.prod.yml,deploy/nginx/bootstrap.conf,deploy/nginx/quiz-app.conf"
                 target: "/tmp/quiz-app-deploy"
 
             - name: Deploy on EC2
@@ -301,27 +272,453 @@ jobs:
                 username: ${{ env.EC2_USER }}
                 key: ${{ secrets.EC2_SSH_KEY }} # private SSH key
                 script: |
-                    set -e 
-                    sudo mkdir -p /opt/quiz-app
-                    sudo cp /tmp/quiz-app-deploy/deploy/compose/docker-compose.prod.yml /opt/quiz-app/docker-compose.prod.yml
+                  set -Eeuo pipefail
 
-                    sudo cp /tmp/quiz-app-deploy/deploy/nginx/quiz-app.conf /etc/nginx/sites-available/quiz-app
-                    sudo rm -f /etc/nginx/sites-enabled/default
-                    sudo ln -sf /etc/nginx/sites-available/quiz-app /etc/nginx/sites-enabled/quiz-app
+                  APP_DIR="/opt/quiz-app"
+                  DOMAIN="${{ env.APP_DOMAIN }}"
 
-                    sudo nginx -t
-                    sudo systemctl reload nginx
+                  echo "========================================"
+                  echo "Preparing deployment directories"
+                  echo "========================================"
+                  
+                  sudo mkdir -p \
+                    "${APP_DIR}/nginx" \
+                    "${APP_DIR}/certbot/conf" \
+                    "${APP_DIR}/certbot/www"
 
-                    echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ env.IMAGE_OWNER }}" --password-stdin
+                  sudo chown -R "$USER:$USER" "${APP_DIR}"
 
-                    cd /opt/quiz-app
-                    docker compose -f docker-compose.prod.yml pull
-                    docker compose -f docker-compose.prod.yml up -d
+                  echo "========================================"
+                  echo "Inspecting copied deployment files"
+                  echo "========================================"
 
-                    sleep 10
+                  find /tmp/quiz-app-deploy -maxdepth 5 -type f -print
+
+                  echo "========================================"
+                  echo "Installing deployment definitions"
+                  echo "========================================"
+
+                  cp \
+                    /tmp/quiz-app-deploy/deploy/compose/docker-compose.prod.yml \
+                    "${APP_DIR}/docker-compose.prod.yml"
+
+                  cp \
+                    /tmp/quiz-app-deploy/deploy/nginx/bootstrap.conf \
+                    "${APP_DIR}/nginx/bootstrap.conf"
+
+                  cp \
+                    /tmp/quiz-app-deploy/deploy/nginx/quiz-app.conf \
+                    "${APP_DIR}/nginx/quiz-app.conf"
+
+
+                  echo "========================================"
+                  echo "Creating deployment environment"
+                  echo "========================================"
+
+                  cat > "${APP_DIR}/.env" <<EOF
+                  IMAGE_TAG=sha-${{ github.sha }}
+                  DOMAIN=${{ env.APP_DOMAIN }}
+                  EOF
+
+                  cat > "${APP_DIR}/backend.env" <<EOF
+                  MONGO_URI=${{ secrets.MONGODB_URI }}
+                  NODE_ENV=production
+                  EOF
+
+                  chmod 600 \
+                    "${APP_DIR}/.env" \
+                    "${APP_DIR}/backend.env"
+
+
+                  echo "========================================"
+                  echo "Authenticating to GHCR"
+                  echo "========================================"
+
+                  echo "${{ secrets.GHCR_PAT }}" |
+                    docker login ghcr.io \
+                      --username "${{ env.IMAGE_OWNER }}" \
+                      --password-stdin
+
+
+                  cd "${APP_DIR}"
+
+
+                  echo "========================================"
+                  echo "Validating Docker Compose"
+                  echo "========================================"
+
+                  docker compose \
+                    -f docker-compose.prod.yml \
+                    config --quiet
+
+                  echo "========================================"
+                  echo "Checking TLS state"
+                  echo "========================================"
+
+                  CERT_FILE="${APP_DIR}/certbot/conf/live/${DOMAIN}/fullchain.pem"
+                  KEY_FILE="${APP_DIR}/certbot/conf/live/${DOMAIN}/privkey.pem"
+
+                  if [ -f "${CERT_FILE}" ] && [ -f "${KEY_FILE}" ]; then
+
+                    echo "Existing TLS certificate found."
+                    echo "Selecting HTTPS Nginx configuration."
+
+                    cp nginx/quiz-app.conf nginx/app.conf
+
+                    TLS_EXISTS=true
+
+                  else
+
+                    echo "No complete TLS certificate found."
+                    echo "Selecting HTTP bootstrap configuration."
+
+                    cp nginx/bootstrap.conf nginx/app.conf
+
+                    TLS_EXISTS=false
+
+                  fi
+
+
+                  echo "========================================"
+                  echo "Validating Docker Compose"
+                  echo "========================================"
+
+                  docker compose \
+                    -f docker-compose.prod.yml \
+                    config --quiet
+
+
+                  echo "========================================"
+                  echo "Pulling deployment images"
+                  echo "========================================"
+
+                  docker compose \
+                    -f docker-compose.prod.yml \
+                    pull backend frontend nginx
+
+
+                  echo "========================================"
+                  echo "Starting application platform"
+                  echo "========================================"
+
+                  docker compose \
+                    -f docker-compose.prod.yml \
+                    up -d \
+                    --remove-orphans
+
+
+                  echo "========================================"
+                  echo "Waiting for initial service health"
+                  echo "========================================"
+
+                  for SERVICE in backend frontend nginx; do
+
+                    echo "Waiting for ${SERVICE}..."
+
+                    CONTAINER_ID="$(
+                      docker compose \
+                        -f docker-compose.prod.yml \
+                        ps -q "${SERVICE}"
+                    )"
+
+                    if [ -z "${CONTAINER_ID}" ]; then
+                      echo "No container found for ${SERVICE}"
+                      exit 1
+                    fi
+
+                    HEALTHY=false
+
+                    for i in $(seq 1 30); do
+
+                      STATUS="$(
+                        docker inspect \
+                          --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+                          "${CONTAINER_ID}"
+                      )"
+
+                      echo "${SERVICE}: ${STATUS}"
+
+                      if [ "${STATUS}" = "healthy" ]; then
+                        HEALTHY=true
+                        break
+                      fi
+
+                      if [ "${STATUS}" = "unhealthy" ]; then
+
+                        echo "${SERVICE} became unhealthy."
+
+                        docker compose \
+                          -f docker-compose.prod.yml \
+                          logs --tail=100 "${SERVICE}"
+
+                        exit 1
+
+                      fi
+
+                      sleep 5
+
+                    done
+
+                    if [ "${HEALTHY}" != "true" ]; then
+
+                      echo "${SERVICE} did not become healthy in time."
+
+                      docker compose \
+                        -f docker-compose.prod.yml \
+                        logs --tail=100 "${SERVICE}"
+
+                      exit 1
+
+                    fi
+
+                  done
+
+
+                  echo "========================================"
+                  echo "Testing internal Docker networking"
+                  echo "========================================"
+
+                  docker compose \
+                    -f docker-compose.prod.yml \
+                    exec -T nginx \
+                    wget -qO- \
+                    http://backend:3000/health
+
+                  docker compose \
+                    -f docker-compose.prod.yml \
+                    exec -T nginx \
+                    wget -qO- \
+                    http://frontend/
+
+
+                  # ==========================================================
+                  # FIRST DEPLOYMENT: TLS bootstrap
+                  # ==========================================================
+
+                  if [ "${TLS_EXISTS}" = "false" ]; then
+
+                    echo "========================================"
+                    echo "Bootstrapping Let's Encrypt certificate"
+                    echo "========================================"
+
+                    echo "Verifying local HTTP through published Nginx port..."
+
+                    curl \
+                      --fail \
+                      --silent \
+                      --show-error \
+                      http://127.0.0.1/nginx-health
+
+
+                    echo "Verifying ACME webroot..."
+
+                    mkdir -p \
+                      "${APP_DIR}/certbot/www/.well-known/acme-challenge"
+
+                    echo "acme-bootstrap-test" > \
+                      "${APP_DIR}/certbot/www/.well-known/acme-challenge/pipeline-test"
+
+                    ACME_RESULT="$(
+                      curl \
+                        --fail \
+                        --silent \
+                        --show-error \
+                        http://127.0.0.1/.well-known/acme-challenge/pipeline-test
+                    )"
+
+                    if [ "${ACME_RESULT}" != "acme-bootstrap-test" ]; then
+                      echo "ACME webroot validation failed."
+                      exit 1
+                    fi
+
+                    rm -f \
+                      "${APP_DIR}/certbot/www/.well-known/acme-challenge/pipeline-test"
+
+
+                    echo "Requesting Let's Encrypt certificate..."
+
+                    docker compose \
+                      -f docker-compose.prod.yml \
+                      --profile certificate \
+                      run --rm certbot \
+                      certonly \
+                      --non-interactive \
+                      --webroot \
+                      --webroot-path=/var/www/certbot \
+                      --email "${{ secrets.CERTBOT_EMAIL }}" \
+                      --agree-tos \
+                      --no-eff-email \
+                      -d "${DOMAIN}"
+
+
+                    echo "Verifying certificate files..."
+
+                    if [ ! -f "${CERT_FILE}" ]; then
+                      echo "fullchain.pem was not created."
+                      exit 1
+                    fi
+
+                    if [ ! -f "${KEY_FILE}" ]; then
+                      echo "privkey.pem was not created."
+                      exit 1
+                    fi
+
+                    echo "Certificate successfully issued."
+
+
+                    echo "========================================"
+                    echo "Activating HTTPS Nginx configuration"
+                    echo "========================================"
+
+                    cp nginx/quiz-app.conf nginx/app.conf
+
+
+                    echo "Validating HTTPS configuration before deployment..."
+
+                    docker run --rm \
+                      -v "${APP_DIR}/nginx/app.conf:/etc/nginx/conf.d/default.conf:ro" \
+                      -v "${APP_DIR}/certbot/conf:/etc/letsencrypt:ro" \
+                      nginx:1.27-alpine \
+                      nginx -t
+
+
+                    echo "Recreating Nginx with HTTPS configuration..."
+
+                    docker compose \
+                      -f docker-compose.prod.yml \
+                      up -d \
+                      --force-recreate \
+                      --no-deps \
+                      nginx
+
+                  fi
+
+
+                  echo "========================================"
+                  echo "Waiting for HTTPS Nginx"
+                  echo "========================================"
+
+                  NGINX_CONTAINER="$(
+                    docker compose \
+                      -f docker-compose.prod.yml \
+                      ps -q nginx
+                  )"
+
+                  NGINX_READY=false
+
+                  for i in $(seq 1 30); do
+
+                    STATUS="$(
+                      docker inspect \
+                        --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+                        "${NGINX_CONTAINER}"
+                    )"
+
+                    echo "nginx: ${STATUS}"
+
+                    if [ "${STATUS}" = "healthy" ]; then
+                      NGINX_READY=true
+                      break
+                    fi
+
+                    if [ "${STATUS}" = "unhealthy" ]; then
+
+                      echo "Nginx became unhealthy after HTTPS activation."
+
+                      docker compose \
+                        -f docker-compose.prod.yml \
+                        logs --tail=100 nginx
+
+                      exit 1
+
+                    fi
+
+                    sleep 2
+
+                  done
+
+                  if [ "${NGINX_READY}" != "true" ]; then
+
+                    echo "Nginx did not become healthy after HTTPS activation."
+
+                    docker compose \
+                      -f docker-compose.prod.yml \
+                      logs --tail=100 nginx
+
+                    exit 1
+
+                  fi
+
+
+                  echo "========================================"
+                  echo "Verifying Nginx TLS configuration"
+                  echo "========================================"
+
+                  docker compose \
+                    -f docker-compose.prod.yml \
+                    exec -T nginx \
+                    nginx -t
+
+
+                  echo "========================================"
+                  echo "Verifying port publication"
+                  echo "========================================"
+
+                  docker compose \
+                    -f docker-compose.prod.yml \
+                    port nginx 80
+
+                  docker compose \
+                    -f docker-compose.prod.yml \
+                    port nginx 443
+
+
+                  echo "========================================"
+                  echo "Checking EC2 host listeners"
+                  echo "========================================"
+
+                  sudo ss -lntp | grep -E ':(80|443)[[:space:]]' || {
+                    echo "Expected ports 80/443 are not listening on the EC2 host."
                     docker compose -f docker-compose.prod.yml ps
-                    curl -f http://127.0.0.1:3000/health
-                    curl -f http://127.0.0.1:8080
+                    exit 1
+                  }
+
+
+                  echo "========================================"
+                  echo "Testing HTTPS locally through host port"
+                  echo "========================================"
+
+                  curl \
+                    --fail \
+                    --silent \
+                    --show-error \
+                    --retry 10 \
+                    --retry-delay 2 \
+                    --resolve "${DOMAIN}:443:127.0.0.1" \
+                    "https://${DOMAIN}/nginx-health"
+
+
+                  echo
+                  echo "========================================"
+                  echo "Deployment status"
+                  echo "========================================"
+
+                  docker compose \
+                    -f docker-compose.prod.yml \
+                    ps
+
+
+                  echo "EC2-side deployment validation completed successfully."
+
+
+                  echo "========================================"
+                  echo "Cleaning temporary deployment files"
+                  echo "========================================"
+
+                  rm -rf /tmp/quiz-app-deploy
+
+
+
                     
             - name: Revoke SSH from GitHub runner
               if: always()
