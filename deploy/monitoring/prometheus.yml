@@ -1,3 +1,4 @@
+# config for what prometheus should scrape and at what interval
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
