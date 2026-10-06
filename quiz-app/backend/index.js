@@ -39,6 +39,9 @@ mongoose.connection.on("disconnected", () => {
 
 mongoose.connection.on("error", (error) => {
   console.error("MongoDB connection error:", error);
+  databaseErrorCounter.inc({
+    operation: "connection",
+  });
 });
 
 const excludedMetricPaths = new Set([
@@ -116,6 +119,9 @@ app.get("/api/questions", async (req, res, next) => {
 
     res.status(200).json(questions);
   } catch (error) {
+    databaseErrorCounter.inc({
+      operation: "find_questions",
+    });
     next(error);
   }
 });
