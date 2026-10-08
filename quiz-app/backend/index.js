@@ -10,6 +10,7 @@ const app = express();
 const port = Number(process.env.PORT || 3000);
 
 const { register, httpRequestCounter, httpRequestDuration, databaseErrorCounter } = require("./metrics");
+const logger = require("./logger");
 
 let server;
 let isShuttingDown = false;
@@ -30,15 +31,28 @@ app.use(
 );
 
 mongoose.connection.on("connected", () => {
-  console.log("MongoDB connection established");
+  logger.info(
+    { event: "mongodb_connected" },
+    "MongoDB connection established"
+  );
 });
 
 mongoose.connection.on("disconnected", () => {
-  console.warn("MongoDB connection lost");
+  logger.warn(
+    { event: "mongodb_disconnected" },
+    "MongoDB connection lost"
+  );
 });
 
 mongoose.connection.on("error", (error) => {
-  console.error("MongoDB connection error:", error);
+  logger.error(
+    {
+      event: "mongodb_connection_error",
+      err: error,
+    },
+    "MongoDB connection error"
+  );
+
   databaseErrorCounter.inc({
     operation: "connection",
   });
@@ -118,11 +132,19 @@ app.get("/api/questions", async (req, res, next) => {
       .maxTimeMS(5_000);
 
     res.status(200).json(questions);
-  } catch (error) {
-    databaseErrorCounter.inc({
+} catch (error) {
+  databaseErrorCounter.inc({
+    operation: "find_questions",
+  });
+  logger.error(
+    {
+      event: "database_query_error",
       operation: "find_questions",
-    });
-    next(error);
+      err: error,
+    },
+    "Failed to retrieve quiz questions"
+  );
+  next(error);
   }
 });
 
@@ -144,7 +166,15 @@ app.use((req, res) => {
 });
 
 app.use((error, req, res, next) => {
-  console.error("Request processing error:", error);
+  logger.error(
+    {
+      event: "request_processing_error",
+      method: req.method,
+      path: req.originalUrl,
+      err: error,
+    },
+    "Request processing failed"
+  );
 
   if (res.headersSent) {
     return next(error);
@@ -169,11 +199,23 @@ async function startApplication() {
       connectTimeoutMS: 10_000,
     });
 
-    server = app.listen(port, "0.0.0.0", () => {
-      console.log(`Quiz API listening on port ${port}`);
-    });
+  server = app.listen(port, "0.0.0.0", () => {
+    logger.info(
+      {
+        event: "application_started",
+        port,
+      },
+      "Quiz API started"
+    );
+});
   } catch (error) {
-    console.error("Application startup failed:", error);
+    logger.fatal(
+      {
+        event: "application_startup_failed",
+        err: error,
+      },
+      "Application startup failed"
+    );
     process.exit(1);
   }
 }
@@ -184,7 +226,13 @@ async function shutdown(signal) {
   }
 
   isShuttingDown = true;
-  console.log(`${signal} received. Shutting down gracefully...`);
+  logger.info(
+    {
+      event: "application_shutdown_started",
+      signal,
+    },
+    "Graceful shutdown started"
+  );
 
   try {
     if (server) {
@@ -202,10 +250,21 @@ async function shutdown(signal) {
 
     await mongoose.disconnect();
 
-    console.log("HTTP server and MongoDB connection closed");
+    logger.info(
+      {
+        event: "application_shutdown_completed",
+      },
+      "HTTP server and MongoDB connection closed"
+    );
     process.exit(0);
   } catch (error) {
-    console.error("Graceful shutdown failed:", error);
+    logger.error(
+      {
+        event: "application_shutdown_failed",
+        err: error,
+      },
+      "Graceful shutdown failed"
+    );
     process.exit(1);
   }
 }
