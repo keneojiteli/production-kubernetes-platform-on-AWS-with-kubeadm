@@ -10,7 +10,8 @@ const app = express();
 const port = Number(process.env.PORT || 3000);
 
 const { register, httpRequestCounter, httpRequestDuration, databaseErrorCounter } = require("./metrics");
-const logger = require("./logger");
+const { logger, safeError } = require("./logger");
+
 
 let server;
 let isShuttingDown = false;
@@ -48,7 +49,7 @@ mongoose.connection.on("error", (error) => {
   logger.error(
     {
       event: "mongodb_connection_error",
-      err: error,
+      error: safeError(error),
     },
     "MongoDB connection error"
   );
@@ -140,7 +141,7 @@ app.get("/api/questions", async (req, res, next) => {
     {
       event: "database_query_error",
       operation: "find_questions",
-      err: error,
+      error: safeError(error),
     },
     "Failed to retrieve quiz questions"
   );
@@ -170,8 +171,9 @@ app.use((error, req, res, next) => {
     {
       event: "request_processing_error",
       method: req.method,
-      path: req.originalUrl,
-      err: error,
+      // path: req.originalUrl, //urls may contain query oarams with sensitive info
+      route: req.route?.path || "unmatched",
+      error: safeError(error),
     },
     "Request processing failed"
   );
@@ -212,7 +214,7 @@ async function startApplication() {
     logger.fatal(
       {
         event: "application_startup_failed",
-        err: error,
+        error: safeError(error),
       },
       "Application startup failed"
     );
@@ -261,7 +263,7 @@ async function shutdown(signal) {
     logger.error(
       {
         event: "application_shutdown_failed",
-        err: error,
+        error: safeError(error),
       },
       "Graceful shutdown failed"
     );
