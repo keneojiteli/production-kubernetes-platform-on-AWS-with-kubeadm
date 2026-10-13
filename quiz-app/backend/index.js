@@ -145,6 +145,7 @@ app.get("/api/questions", async (req, res, next) => {
     },
     "Failed to retrieve quiz questions"
   );
+  error.alreadyLogged = true;
   next(error);
   }
 });
@@ -166,7 +167,9 @@ app.use((req, res) => {
   });
 });
 
+// global handler
 app.use((error, req, res, next) => {
+  if (!error.alreadyLogged) {
   logger.error(
     {
       event: "request_processing_error",
@@ -175,8 +178,8 @@ app.use((error, req, res, next) => {
       route: req.route?.path || "unmatched",
       error: safeError(error),
     },
-    "Request processing failed"
-  );
+    "Request processing failed");
+  }
 
   if (res.headersSent) {
     return next(error);
