@@ -3,6 +3,17 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# load alert rules, tells Prometheus where to find/load alert rules 
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
+# tells prometheus where to send firing& resolved alerts to (Alertmanager)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
 # scrape_config defines targets whose metrics endpoints it polls
 scrape_configs:
   - job_name: prometheus
