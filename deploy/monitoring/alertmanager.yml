@@ -1,0 +1,43 @@
+# receives firing/resolved alerts & defines where notifications go
+
+# shared settings
+global:
+  smtp_smarthost: "smtp.gmail.com:587"
+  smtp_from: "ceceepieter@gmail.com"
+  smtp_auth_username: "ceceepieter@gmail.com"
+  smtp_auth_password_file: "/etc/alertmanager/secrets/smtp_password"
+  smtp_require_tls: true
+
+# instructions for distributing notifications
+route:
+  receiver: all-notifications
+  group_by: ["alertname", "service"]
+  group_wait: 15s
+  group_interval: 5m
+  repeat_interval: 4h
+
+# named collection of notification configs (email, telegram & webhook)
+receivers:
+  - name: all-notifications
+
+    email_configs:
+      - to: "estherbibian846@gmail.com"
+        send_resolved: true # if true, another notification can be sent when the alert resolves
+
+    telegram_configs:
+      - bot_token_file: "/etc/alertmanager/secrets/telegram_bot_token"
+        chat_id: 1924431760
+        send_resolved: true
+        parse_mode: ""
+        message: |
+          {{ .Status | toUpper }}: {{ .CommonLabels.alertname }}
+          Service: {{ .CommonLabels.service }}
+          {{ range .Alerts }}
+          {{ .Annotations.summary }}
+          {{ .Annotations.description }}
+          {{ end }}
+
+    webhook_configs:
+    - url: "http://webhook-receiver:8080/alerts" # http://<service-name>:<receiving-application-port>/<endpoint-implemented-by-receiver>
+      send_resolved: true
+      max_alerts: 10
