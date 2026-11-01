@@ -68,4 +68,4 @@ deploy/compose/monitoring.env
 **/nginx/app.conf
 
 # secrets
-monitoring/secrets/
+deploy/monitoring/secrets/
