@@ -86,7 +86,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Build Docker image
-        run: docker build -t "local/${{ matrix.app }}:ci "${{ matrix.path }}" # build images locally on GH runner
+        run: docker build -t "local/${{ matrix.app }}:ci" "${{ matrix.path }}" # build images locally on GH runner
 
   compose-validation:
     name: Validate Docker Compose
