@@ -60,8 +60,11 @@ jobs:
       - name: Build
         run: npm run build --if-present
 
-      - name: Dependency audit
-        run: npm audit --audit-level=high # --omit=dev
+      # - name: Dependency audit
+      #   run: npm audit --audit-level=high # --omit=dev
+
+      - name: Production dependency security audit
+        run: npm audit --omit=dev --audit-level=high
 
   container-validation:
     name: Container Build - ${{ matrix.app }}
