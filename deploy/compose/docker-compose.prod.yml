@@ -1,6 +1,11 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
 services:
   backend:
-    image: ghcr.io/keneojiteli/quiz-backend:${IMAGE_TAG:?IMAGE_TAG must be set}
+    image: ghcr.io/keneojiteli/quiz-backend:${BACKEND_IMAGE_TAG:?BACKEND_IMAGE_TAG must be set}
     expose:
       - "3000" # use IP:port if nginx is installed directly on EC2
     env_file:
@@ -11,12 +16,13 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    logging: *default-logging
     networks:
       - quiz-network
     restart: unless-stopped
 
   frontend:
-    image: ghcr.io/keneojiteli/quiz-frontend:${IMAGE_TAG:?IMAGE_TAG must be set}
+    image: ghcr.io/keneojiteli/quiz-frontend:${FRONT_IMAGE_TAG:?FRONTEND_IMAGE_TAG must be set}
     expose:
       - "80"
     healthcheck:
@@ -28,6 +34,7 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    logging: *default-logging
     networks:
       - quiz-network
     restart: unless-stopped
@@ -54,6 +61,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    logging: *default-logging
     restart: unless-stopped
     networks:
       - quiz-network
@@ -79,9 +87,11 @@ services:
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro # EC2 path
       # - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro # local testing/windows path
+      - ./monitoring/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
       - prometheus-data:/prometheus
     ports:
       - "127.0.0.1:9090:9090" # this service is not exposed directly to the internet
+    logging: *default-logging
     networks:
       - quiz-network
     restart: unless-stopped
@@ -98,6 +108,7 @@ services:
       # - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro # local testing/windows path
     ports:
       - "127.0.0.1:3001:3000"
+    logging: *default-logging
     networks:
       - quiz-network
     restart: unless-stopped
@@ -119,6 +130,7 @@ services:
       - /dev/disk:/dev/disk:ro
     ports:
       - "127.0.0.1:8081:8080"
+    logging: *default-logging
     networks:
       - quiz-network
     restart: unless-stopped
@@ -136,10 +148,47 @@ services:
       - /:/host:ro
     ports:
       - "127.0.0.1:9100:9100"
+    logging: *default-logging
     networks:
       - quiz-network
     restart: unless-stopped
 
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./monitoring/secrets:/etc/alertmanager/secrets:ro
+      - alertmanager-data:/alertmanager
+
+      # alternate short bind-mount syntax
+      # - type: bind
+      #   source: ./monitoring/prometheus.yml
+      #   target: /etc/prometheus/prometheus.yml
+      #   read_only: true
+      #   bind:
+      #     create_host_path: false # a missing configuration file causes deployment to fail rather than silently creating a directory
+
+    ports:
+      - "127.0.0.1:9093:9093"
+    logging: *default-logging
+    networks:
+      - quiz-network
+    restart: unless-stopped
+
+  webhook-receiver:
+    image: ghcr.io/keneojiteli/quiz-webhook-receiver:v1.0.0 # use immutable tags for different builds
+    # image: ghcr.io/keneojiteli/quiz-webhook-receiver:${RECEIVERS_IMAGE_TAG:?RECEIVERS_IMAGE_TAG must be set} # use immutable tags for different builds
+    expose:
+      - "8080"
+    logging: *default-logging
+    networks:
+      - quiz-network
+    restart: unless-stopped
+
+# shared network that permits Nginx to communicate with all services
 networks:
   quiz-network:
     driver: bridge
@@ -147,3 +196,4 @@ networks:
 volumes:
   prometheus-data:
   grafana-data:
+  alertmanager-data:
