@@ -2,22 +2,22 @@ name: CI - Build, Scan, Push  & Deploy to server
 
 on:
   workflow_dispatch:
-  push:
-    branches: 
-      - refactor/containerized-nginx-certbot
-    paths:
-      - "quiz-app/backend/**" # ** matches everything inside folder including files & directories at all nested levels
-      - "quiz-app/frontend/**"
-      - ".github/workflows/**"
-      - "deploy/**"
+  # push:
+  #   branches: 
+  #     - refactor/containerized-nginx-certbot
+  #   paths:
+  #     - "quiz-app/backend/**" # ** matches everything inside folder including files & directories at all nested levels
+  #     - "quiz-app/frontend/**"
+  #     - ".github/workflows/**"
+  #     - "deploy/**"
  
-  pull_request: # builds and scans PRs but does not push images
-    branches: ["main"]
-    paths:
-      - "quiz-app/backend/**" # ** matches everything inside folder including files & directories at all nested levels
-      - "quiz-app/frontend/**"
-      - "deploy/**"
-      - ".github/workflows/**"
+  # pull_request: # builds and scans PRs but does not push images
+  #   branches: ["main"]
+  #   paths:
+  #     - "quiz-app/backend/**" # ** matches everything inside folder including files & directories at all nested levels
+  #     - "quiz-app/frontend/**"
+  #     - "deploy/**"
+  #     - ".github/workflows/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -240,6 +240,7 @@ jobs:
   deploy-ec2:
         name: Deploy to EC2 with docker compose
         needs: ci-build-scan-push
+        # if: github.ref == 'refs/heads/feature/ec2-monitoring'
         if: github.ref == 'refs/heads/refactor/containerized-nginx-certbot'
         runs-on: ubuntu-latest
 
@@ -273,8 +274,7 @@ jobs:
                 host: ${{ secrets.EC2_HOST }}
                 username: ${{ env.EC2_USER }}
                 key: ${{ secrets.EC2_SSH_KEY }}
-                # source: "deploy/compose/docker-compose.prod.yml,deploy/nginx/quiz-app.conf,deploy/monitoring/**"
-                source: "deploy/compose/docker-compose.prod.yml,deploy/nginx/bootstrap.conf,deploy/nginx/quiz-app.conf"
+                source: "deploy/compose/docker-compose.prod.yml,deploy/nginx/bootstrap.conf,deploy/nginx/quiz-app.conf,deploy/monitoring/**"
                 target: "/tmp/quiz-app-deploy"
 
             - name: Deploy on EC2
@@ -289,12 +289,16 @@ jobs:
                   APP_DIR="/opt/quiz-app"
                   DOMAIN="${{ env.APP_DOMAIN }}"
 
+                  SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
+                  IMAGE_TAG="sha-${SHORT_SHA}"                  
+
                   echo "========================================"
                   echo "Preparing deployment directories"
                   echo "========================================"
                   
                   sudo mkdir -p \
                     "${APP_DIR}/nginx" \
+                    "${APP_DIR}/monitoring" \
                     "${APP_DIR}/certbot/conf" \
                     "${APP_DIR}/certbot/www"
 
@@ -322,14 +326,20 @@ jobs:
                     /tmp/quiz-app-deploy/deploy/nginx/quiz-app.conf \
                     "${APP_DIR}/nginx/quiz-app.conf"
 
+                  rm -rf "${APP_DIR}/monitoring"
+
+                  cp -R \
+                    /tmp/quiz-app-deploy/deploy/monitoring \
+                    "${APP_DIR}/monitoring"
+
 
                   echo "========================================"
                   echo "Creating deployment environment"
                   echo "========================================"
 
                   cat > "${APP_DIR}/.env" <<EOF
-                  IMAGE_TAG=sha-${{ github.sha }}
-                  DOMAIN=${{ env.APP_DOMAIN }}
+                  IMAGE_TAG=${IMAGE_TAG}
+                  DOMAIN=${DOMAIN}
                   EOF
 
                   cat > "${APP_DIR}/backend.env" <<EOF
@@ -337,9 +347,16 @@ jobs:
                   NODE_ENV=production
                   EOF
 
+                  cat > "${APP_DIR}/monitoring.env" <<EOF
+                  GF_SECURITY_ADMIN_USER=${{ secrets.GRAFANA_ADMIN_USER }}
+                  GF_SECURITY_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+                  GF_USERS_ALLOW_SIGN_UP=false
+                  EOF
+
                   chmod 600 \
                     "${APP_DIR}/.env" \
-                    "${APP_DIR}/backend.env"
+                    "${APP_DIR}/backend.env" \
+                    "${APP_DIR}/monitoring.env"
 
 
                   echo "========================================"
@@ -406,11 +423,11 @@ jobs:
 
                   docker compose \
                     -f docker-compose.prod.yml \
-                    pull backend frontend nginx
+                    pull backend frontend nginx prometheus grafana cadvisor node-exporter
 
 
                   echo "========================================"
-                  echo "Starting application platform"
+                  echo "Starting application platform + monitoring stack"
                   echo "========================================"
 
                   docker compose \
@@ -590,7 +607,7 @@ jobs:
                     docker run --rm \
                       -v "${APP_DIR}/nginx/app.conf:/etc/nginx/conf.d/default.conf:ro" \
                       -v "${APP_DIR}/certbot/conf:/etc/letsencrypt:ro" \
-                      nginx:1.27-alpine \
+                      nginx:1.30.4-alpine \
                       nginx -t
 
 
@@ -605,6 +622,7 @@ jobs:
 
                   fi
 
+                  # correct till here
 
                   echo "========================================"
                   echo "Waiting for HTTPS Nginx"
@@ -695,7 +713,7 @@ jobs:
                     exit 1
                   }
 
-
+                  # here
                   echo "========================================"
                   echo "Testing HTTPS locally through host port"
                   echo "========================================"
@@ -709,6 +727,56 @@ jobs:
                     --resolve "${DOMAIN}:443:127.0.0.1" \
                     "https://${DOMAIN}/nginx-health"
 
+                  echo "========================================"
+                  echo "Validating monitoring stack"
+                  echo "========================================"
+
+                  curl \
+                    --fail \
+                    --silent \
+                    --show-error \
+                    http://127.0.0.1:9090/-/ready
+
+                  curl \
+                    --fail \
+                    --silent \
+                    --show-error \
+                    http://127.0.0.1:3001/api/health
+
+                  curl \
+                    --fail \
+                    --silent \
+                    --show-error \
+                    http://127.0.0.1:8081/metrics \
+                    > /dev/null
+
+                  curl \
+                    --fail \
+                    --silent \
+                    --show-error \
+                    http://127.0.0.1:9100/metrics \
+                    > /dev/null
+
+
+                  echo "========================================"
+                  echo "Validating Prometheus configuration"
+                  echo "========================================"
+
+                  docker compose \
+                    -f docker-compose.prod.yml \
+                    exec -T prometheus \
+                    promtool check config /etc/prometheus/prometheus.yml
+
+
+                  echo "========================================"
+                  echo "Checking Prometheus targets"
+                  echo "========================================"
+
+                  curl \
+                    --fail \
+                    --silent \
+                    http://127.0.0.1:9090/api/v1/targets \
+                    > /tmp/prometheus-targets.json
 
                   echo
                   echo "========================================"
@@ -720,7 +788,7 @@ jobs:
                     ps
 
 
-                  echo "EC2-side deployment validation completed successfully."
+                  echo ""Application + monitoring deployment successful."
 
 
                   echo "========================================"
