@@ -7,7 +7,7 @@ on:
   push:
     branches: 
       - main
-      - feature/ec2-monitoring
+      # - feature/ec2-monitoring
   workflow_dispatch:
 
 permissions:
