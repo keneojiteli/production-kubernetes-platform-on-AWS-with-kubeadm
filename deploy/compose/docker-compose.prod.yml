@@ -179,8 +179,8 @@ services:
     restart: unless-stopped
 
   webhook-receiver:
-    image: ghcr.io/keneojiteli/quiz-webhook-receiver:v1.0.0 # use immutable tags for different builds
-    # image: ghcr.io/keneojiteli/quiz-webhook-receiver:${RECEIVERS_IMAGE_TAG:?RECEIVERS_IMAGE_TAG must be set} # use immutable tags for different builds
+    # image: ghcr.io/keneojiteli/quiz-webhook-receiver:v1.0.0 # use immutable tags for different builds
+    image: ghcr.io/keneojiteli/quiz-webhook-receiver:${RECEIVERS_IMAGE_TAG:?RECEIVERS_IMAGE_TAG must be set} # use immutable tags for different builds
     expose:
       - "8080"
     logging: *default-logging
