@@ -1,0 +1,38 @@
+# config for what prometheus should scrape and at what interval
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# load alert rules, tells Prometheus where to find/load alert rules 
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
+# tells prometheus where to send firing& resolved alerts to (Alertmanager)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# scrape_config defines targets whose metrics endpoints it polls
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - prometheus:9090 # use service name because services are on the same network (quiz-network)
+
+  - job_name: cadvisor
+    static_configs:
+      - targets:
+          - cadvisor:8080
+
+  - job_name: node-exporter
+    static_configs:
+      - targets:
+          - node-exporter:9100
+
+  - job_name: quiz-backend
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - backend:3000

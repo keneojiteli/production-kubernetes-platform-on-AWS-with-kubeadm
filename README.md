@@ -188,6 +188,32 @@ kubeadm-production-platform/
 │
 └── README.md
 ---
+quiz-app/
+├── frontend/
+├── backend/
+├── .github/
+│   └── workflows/
+│       └── ci-build-scan-push.yml
+│
+├── deploy/
+│   ├── ec2-compose/
+│   │   ├── docker-compose.prod.yml
+│   │   ├── nginx.conf
+│   │   ├── backend.env.example
+│   │   ├── deploy.sh
+│   │   ├── rollback.sh
+│   │   └── README.md
+│   │
+│   └── kubernetes/
+│       ├── base/
+│       ├── overlays/
+│       └── README.md
+│
+├── docs/
+│   ├── kubeadm-platform.md
+│   ├── ec2-compose-deployment.md
+│   └── troubleshooting.md
+└── README.md
 -->
 ## Project Objectives
 

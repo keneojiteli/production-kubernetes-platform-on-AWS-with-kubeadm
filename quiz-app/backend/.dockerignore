@@ -11,4 +11,5 @@ README.md
 npm-debug.log
 .env
 .github
+coverage
 # package-lock.json

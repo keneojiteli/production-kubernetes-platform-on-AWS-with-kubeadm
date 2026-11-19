@@ -1,0 +1,43 @@
+# defines when the alert fires
+
+groups:
+  - name: quiz-application-alerts
+    rules:
+      # - alert: TestAlert
+      #   expr: vector(1)
+      #   # expr: vector(0) > 0 # test recovery
+      #   for: 30s
+      #   labels:
+      #     severity: warning
+      #     service: quiz-backend
+      #   annotations:
+      #     summary: "Testing Alertmanager notifications"
+      #     description: "Verifying all three notification integrations."
+
+      - alert: QuizBackendDown
+        expr: up{job="quiz-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: quiz-backend
+        annotations:
+          summary: "Quiz backend scrape is unavailable"
+          description: "Prometheus has been unable to scrape the quiz backend for at least one minute."
+
+      - alert: HighHTTP5xxErrorRate
+        expr: |
+          (
+            sum(rate(quiz_backend_http_requests_total{job="quiz-backend",status_code=~"5.."}[5m]))
+            /
+            sum(rate(quiz_backend_http_requests_total{job="quiz-backend"}[5m]))
+          ) > 0.05
+          and
+          sum(increase(quiz_backend_http_requests_total{job="quiz-backend"}[5m])) > 20
+        for: 1m
+        # keep_firing_for: 2m # how long Prometheus keeps an already-firing alert active after the condition stops being true
+        labels:
+          severity: warning
+          service: quiz-backend
+        annotations:
+          summary: "High HTTP 5xx error rate"
+          description: "More than 5% of recent HTTP requests returned server errors."
