@@ -91,10 +91,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }} # generated automatically by GitHub for each workflow run
 
-    #   - name: Push scanned image
-    #     shell: bash
-    #     run: docker push "${{ steps.image.outputs.ref }}"
-
      - name: Push scanned image
        shell: bash
        env:
